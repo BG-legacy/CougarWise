@@ -2,11 +2,15 @@
 import openai
 from typing import Dict, Any, List
 import os
+import sys
 from dotenv import load_dotenv
-from student_spending_analysis import StudentSpendingAnalysis
+from AI.student_spending_analysis import StudentSpendingAnalysis
 
-# Load environment variables from .env file
-load_dotenv()
+# Load environment variables from the root .env file
+# Get the absolute path to the backend directory (one level up from current directory)
+backend_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+dotenv_path = os.path.join(backend_dir, '.env')
+load_dotenv(dotenv_path)
 
 class WebsiteAIAssistant:
     def __init__(self):
@@ -217,3 +221,29 @@ class WebsiteAIAssistant:
                 "status": "error",
                 "error": str(e)
             }
+
+# Main execution block when run directly
+if __name__ == "__main__":
+    print("Initializing CougarWise AI Assistant...")
+    assistant = WebsiteAIAssistant()
+    
+    # Example query
+    query = "What are some good budgeting tips for college students?"
+    user_context = {
+        "year_in_school": "Sophomore",
+        "major": "Computer Science",
+        "monthly_income": 1200,
+        "financial_aid": 5000
+    }
+    
+    print("\nProcessing query:", query)
+    response = assistant.process_user_query(query, user_context)
+    
+    print("\nResponse Status:", response["status"])
+    if response["status"] == "success":
+        print("\nAI Assistant Response:")
+        print(response["response"])
+    else:
+        print("\nError:", response.get("error", "Unknown error occurred"))
+    
+    print("\nAI Assistant initialization complete. Ready to use in your application.")

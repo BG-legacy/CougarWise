@@ -1,17 +1,53 @@
 from fastapi import FastAPI
 from pydantic import BaseModel
-import connection
-from fastapi import FastAPI, APIRouter, Request, Body
+import sys
+import os
+from fastapi import FastAPI, APIRouter, Request, Body, HTTPException
 from bson import ObjectId
 from pydantic import BaseModel
+from typing import List, Dict, Any, Optional
+from fastapi.middleware.cors import CORSMiddleware
+
+# Add path to backend directory to import AI modules
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+from AI.website_ai_assistant import WebsiteAIAssistant
 
 app = FastAPI()
+
+# Configure CORS
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],  # Allows all origins
+    allow_credentials=True,
+    allow_methods=["*"],  # Allows all methods
+    allow_headers=["*"],  # Allows all headers
+)
+
+# Initialize AI assistant
+ai_assistant = WebsiteAIAssistant()
 
 class Student(BaseModel):
     firstname: str | None = None        
     lastname: str | None = None
     username: str | None = None
     email: str | None = None
+
+class UserQuery(BaseModel):
+    query: str
+    user_context: Dict[str, Any] = None
+
+class UserProfile(BaseModel):
+    year_in_school: str
+    major: str
+    monthly_income: float
+    financial_aid: float
+    age: Optional[int] = None
+    gender: Optional[str] = None
+    preferred_payment_method: Optional[str] = None
+
+class FinancialGoals(BaseModel):
+    goals: List[str]
+    user_context: Dict[str, Any]
 
 newuser = Student()
 
@@ -190,4 +226,50 @@ async def delete_item(request: Request, username: str):
     db = request.app.mongodb["collection_name"]
     result = await db.delete_one({"username": str})
     return {"deleted_count": result.deleted_count}
+
+# AI Assistant Endpoints
+
+@app.post("/ai/query")
+async def process_query(user_query: UserQuery):
+    """
+    Process a user query using the AI assistant
+    """
+    try:
+        result = ai_assistant.process_user_query(user_query.query, user_query.user_context)
+        return result
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error processing query: {str(e)}")
+
+@app.post("/ai/spending-advice")
+async def get_spending_advice(user_data: UserProfile):
+    """
+    Get personalized spending advice based on user profile
+    """
+    try:
+        result = ai_assistant.get_spending_advice(user_data.dict())
+        return result
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error generating spending advice: {str(e)}")
+
+@app.post("/ai/budget-template")
+async def get_budget_template(user_profile: UserProfile):
+    """
+    Generate a personalized budget template
+    """
+    try:
+        result = ai_assistant.get_budget_template(user_profile.dict())
+        return result
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error generating budget template: {str(e)}")
+
+@app.post("/ai/analyze-goals")
+async def analyze_financial_goals(goals_data: FinancialGoals):
+    """
+    Analyze and provide feedback on financial goals
+    """
+    try:
+        result = ai_assistant.analyze_financial_goals(goals_data.goals, goals_data.user_context)
+        return result
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error analyzing financial goals: {str(e)}")
 

@@ -10,8 +10,11 @@ import openai
 import os
 from dotenv import load_dotenv
 
-# Load environment variables from .env file
-load_dotenv()
+# Load environment variables from the root .env file
+# Get the absolute path to the backend directory (one level up from current directory)
+backend_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+dotenv_path = os.path.join(backend_dir, '.env')
+load_dotenv(dotenv_path)
 
 class StudentSpendingAnalysis:
     def __init__(self):
@@ -21,7 +24,17 @@ class StudentSpendingAnalysis:
         self.label_encoders = {}  # Dictionary to store encoders for categorical variables
         # Set up API key and configuration from environment variables
         openai.api_key = os.getenv('OPENAI_API_KEY')
+        
+        # Get the path to the CSV file - first try from env, then use default path
         self.data_path = os.getenv('STUDENT_DATA_PATH')
+        
+        # If data_path is not set or file doesn't exist, use the default path relative to this file
+        if not self.data_path or not os.path.exists(self.data_path):
+            # Get the directory where this script is located
+            current_dir = os.path.dirname(os.path.abspath(__file__))
+            self.data_path = os.path.join(current_dir, 'student_spending.csv')
+            print(f"Using default data path: {self.data_path}")
+        
         self.model_epochs = int(os.getenv('MODEL_EPOCHS', 50))
         self.batch_size = int(os.getenv('BATCH_SIZE', 32))
         
@@ -31,6 +44,10 @@ class StudentSpendingAnalysis:
         Returns: Preprocessed features and target variables
         """
         try:
+            # Check if file exists
+            if not os.path.exists(self.data_path):
+                raise FileNotFoundError(f"Could not find student_spending.csv file at {self.data_path}")
+                
             # Load CSV data into pandas DataFrame
             data = pd.read_csv(self.data_path)
             if data.empty:
@@ -96,7 +113,7 @@ class StudentSpendingAnalysis:
         
         return model
 
-    def train_model(self, epochs=50, batch_size=32):
+    def train_model(self, epochs=None, batch_size=None):
         """
         Train the neural network on student spending data
         Args:
@@ -106,6 +123,13 @@ class StudentSpendingAnalysis:
             Training history object
         """
         try:
+            # Use provided values or fall back to instance variables
+            epochs = epochs or self.model_epochs
+            batch_size = batch_size or self.batch_size
+            
+            print(f"Starting model training with {epochs} epochs and batch size {batch_size}")
+            print(f"Using data from: {self.data_path}")
+            
             # Get preprocessed features and target values
             features, targets = self.load_and_preprocess_data()
             
@@ -132,7 +156,11 @@ class StudentSpendingAnalysis:
             
             return history
             
+        except FileNotFoundError as e:
+            print(f"File not found error: {str(e)}")
+            raise FileNotFoundError(f"Could not find student_spending.csv file at {self.data_path}")
         except Exception as e:
+            print(f"Error training the model: {str(e)}")
             raise Exception(f"Error training the model: {str(e)}")
 
     def predict_spending(self, user_data):
