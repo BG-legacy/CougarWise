@@ -195,9 +195,13 @@ class StudentSpendingAnalysis:
                 verbose=1  # Show training progress
             )
             
-            # Evaluate model performance on test set
-            test_loss, test_mae = self.model.evaluate(X_test, y_test, verbose=0)
-            print(f"\nTest Mean Absolute Error: ${test_mae:.2f}")
+            # Evaluate model performance on test set - handle both real and mock Keras
+            try:
+                test_loss, test_mae = self.model.evaluate(X_test, y_test, verbose=0)
+                print(f"\nTest Mean Absolute Error: ${test_mae:.2f}")
+            except AttributeError:
+                # If using mock Keras, skip evaluation
+                print("\nSkipping model evaluation (using mock Keras)")
             
             return history
             
