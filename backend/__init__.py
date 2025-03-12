@@ -1,0 +1,3 @@
+"""
+CougarWise backend package.
+""" 

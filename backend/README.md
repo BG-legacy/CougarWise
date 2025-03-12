@@ -64,6 +64,64 @@ The API will still work without the trained model, but the spending analysis fea
 
 ## API Endpoints
 
+### Authentication Endpoints
+
+- **POST /api/auth/register**: Register a new user
+  ```json
+  {
+    "username": "testuser",
+    "email": "test@example.com",
+    "password": "password123",
+    "name": "Test User"
+  }
+  ```
+
+- **POST /api/auth/login**: Login with username and password
+  ```json
+  {
+    "username": "testuser",
+    "password": "password123"
+  }
+  ```
+
+### Transaction Endpoints
+
+- **POST /api/transactions**: Create a new transaction
+  ```json
+  {
+    "user_id": "user_id_here",
+    "amount": -50.00,
+    "category": "Food",
+    "description": "Grocery shopping"
+  }
+  ```
+
+- **GET /api/transactions/user/{user_id}**: Get all transactions for a user
+
+### Budget Endpoints
+
+- **POST /api/budgets**: Create or update a budget category
+  ```json
+  {
+    "user_id": "user_id_here",
+    "category": "Food",
+    "amount": 300.00,
+    "period": "monthly"
+  }
+  ```
+
+- **GET /api/budgets/user/{user_id}**: Get all budgets for a user
+
+### Financial Analysis Endpoints
+
+- **GET /api/analysis/spending/{user_id}**: Get spending analysis for a user
+  - Query parameters:
+    - `period`: Analysis period (daily, weekly, monthly, yearly)
+    - `start_date`: Start date for custom period (ISO format)
+    - `end_date`: End date for custom period (ISO format)
+
+- **GET /api/analysis/insights/{user_id}**: Get spending insights and recommendations for a user
+
 ### AI Assistant Endpoints
 
 - **POST /ai/query**: Process a general user query
@@ -117,4 +175,22 @@ The API will still work without the trained model, but the spending analysis fea
 
 ## Testing the API
 
-You can test the API using curl, Postman, or by visiting the interactive documentation at `http://localhost:8000/docs` when the server is running. 
+You can test the API using curl, Postman, or by visiting the interactive documentation at `http://localhost:8000/docs` when the server is running.
+
+### Using the Test Scripts
+
+We provide two test scripts to help you test the API:
+
+1. **Bash script with curl commands**:
+   ```bash
+   cd tests
+   ./test_api_curl.sh
+   ```
+
+2. **Python test script**:
+   ```bash
+   cd tests
+   ./test_api.py
+   ```
+
+See the `tests/README.md` file for more detailed testing instructions. 

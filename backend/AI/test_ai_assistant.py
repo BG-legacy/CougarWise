@@ -1,15 +1,21 @@
 #!/usr/bin/env python3
 # Test script for WebsiteAIAssistant
 
-from website_ai_assistant import WebsiteAIAssistant
+import pytest
+from AI.website_ai_assistant import WebsiteAIAssistant
 
-def main():
+def test_initialization():
+    """Test that the AI assistant can be initialized."""
+    assistant = WebsiteAIAssistant()
+    assert assistant is not None
+    assert hasattr(assistant, 'spending_analyzer')
+
+def test_process_user_query():
+    """Test the process_user_query method."""
     # Create an instance of the AI assistant
-    print("Initializing AI Assistant...")
     assistant = WebsiteAIAssistant()
     
-    # Test the process_user_query method
-    print("\nTesting basic query processing:")
+    # Test query processing
     query = "What are some good budgeting tips for college students?"
     user_context = {
         "year_in_school": "Sophomore",
@@ -19,11 +25,17 @@ def main():
     }
     
     response = assistant.process_user_query(query, user_context)
-    print(f"Status: {response['status']}")
-    print(f"Response: {response['response']}")
+    assert response is not None
+    assert 'status' in response
+    assert 'response' in response
+    assert response['status'] == 'success'
+
+def test_get_spending_advice():
+    """Test the get_spending_advice method."""
+    # Create an instance of the AI assistant
+    assistant = WebsiteAIAssistant()
     
-    # Test the get_spending_advice method
-    print("\nTesting spending advice:")
+    # Test spending advice
     user_data = {
         "age": 20,
         "gender": "Male",
@@ -35,27 +47,31 @@ def main():
         "preferred_payment_method": "Credit Card"
     }
     
-    try:
-        advice = assistant.get_spending_advice(user_data)
-        print(f"Status: {advice['status']}")
-        if advice['status'] == 'success':
-            print("Predictions:")
-            for category, amount in advice['predictions'].items():
-                print(f"  {category}: ${amount:.2f}")
-            print(f"\nAdvice: {advice['advice']}")
-        else:
-            print(f"Error: {advice.get('error', 'Unknown error')}")
-    except Exception as e:
-        print(f"Error testing spending advice: {e}")
+    advice = assistant.get_spending_advice(user_data)
+    assert advice is not None
+    assert 'status' in advice
+    assert advice['status'] == 'success'
+    assert 'predictions' in advice
+    assert 'advice' in advice
+
+def test_get_budget_template():
+    """Test the get_budget_template method."""
+    # Create an instance of the AI assistant
+    assistant = WebsiteAIAssistant()
     
-    # Test the get_budget_template method
-    print("\nTesting budget template:")
+    # Test budget template
+    user_context = {
+        "year_in_school": "Sophomore",
+        "major": "Computer Science",
+        "monthly_income": 1200,
+        "financial_aid": 5000
+    }
+    
     budget_template = assistant.get_budget_template(user_context)
-    print(f"Status: {budget_template['status']}")
-    if budget_template['status'] == 'success':
-        print(f"Template: {budget_template['template']}")
-    else:
-        print(f"Error: {budget_template.get('error', 'Unknown error')}")
+    assert budget_template is not None
+    assert 'status' in budget_template
+    assert budget_template['status'] == 'success'
+    assert 'template' in budget_template
 
 if __name__ == "__main__":
-    main() 
+    pytest.main() 
