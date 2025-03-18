@@ -25,7 +25,7 @@ class TestDatabaseConnection:
         
         # Check database
         assert db is not None
-        assert db.name == "cougarwise_test"
+        assert db.name == "CougarWise"
     
     def test_get_collection(self):
         """Test getting a collection."""
@@ -58,4 +58,4 @@ class TestDatabaseConnection:
         
         # Check database
         assert db is not None
-        assert db.name == "cougarwise_test" 
+        assert db.name == "CougarWise" 

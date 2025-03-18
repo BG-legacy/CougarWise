@@ -160,4 +160,60 @@ curl -X POST http://localhost:8000/ai/query \
 - If you get connection refused errors, make sure the backend server is running
 - If you get 404 errors, check that the endpoint URL is correct
 - If you get 500 errors, check the server logs for more details
-- If you get authentication errors, make sure you're using the correct credentials 
+- If you get authentication errors, make sure you're using the correct credentials
+
+## OpenAI Integration Testing
+
+The CougarWise project uses OpenAI's API for various AI-powered features. To ensure proper integration and handling of the OpenAI API, we have created several test files specifically for OpenAI functionality:
+
+### New OpenAI Test Files
+
+1. **TestOpenAIIntegration** (in `test_ai_components.py`)
+   - Tests direct integration with OpenAI API in our components
+   - Verifies correct parameter passing, response parsing, and error handling
+
+2. **TestOpenAIConfigBehavior** (in `test_ai_api_endpoints.py`)
+   - Tests API endpoint behavior based on OpenAI configuration
+   - Verifies graceful handling when AI services are unavailable
+   - Tests error handling for missing API keys and rate limits
+
+3. **test_openai_direct.py**
+   - Standalone script that tests direct connection to OpenAI API
+   - Verifies API key existence, connection, and JSON response formatting
+   - Can be run independently to troubleshoot OpenAI connectivity issues
+
+4. **test_openai.sh**
+   - Shell script to run all OpenAI-related tests in one command
+   - Checks environment setup, dependencies, and API connectivity
+   - Provides clear, color-coded output for test results
+
+### Running OpenAI Tests
+
+To run all OpenAI-related tests:
+
+```bash
+# From the tests directory
+./test_openai.sh
+```
+
+To run specific OpenAI test components:
+
+```bash
+# Test direct OpenAI API connection
+python test_openai_direct.py
+
+# Test OpenAI integration in components
+pytest test_ai_components.py::TestOpenAIIntegration -v
+
+# Test OpenAI behavior in API endpoints
+pytest test_ai_api_endpoints.py::TestOpenAIConfigBehavior -v
+```
+
+### Setting Up OpenAI API Key
+
+To run the OpenAI tests, you need a valid OpenAI API key:
+
+1. Create a `.env` file in the backend directory
+2. Add your OpenAI API key: `OPENAI_API_KEY=your_key_here`
+
+The tests will automatically detect and use this key. 
