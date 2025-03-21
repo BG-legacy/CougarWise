@@ -84,6 +84,7 @@ class FinancialGoalCreate(BaseModel):
     targetAmount: float  # Target amount to save/earn
     currentAmount: float  # Current progress towards the goal
     category: str  # Category of the goal (e.g., Emergency Fund, Vacation)
+    name: str  # Name of the financial goal
     deadline: datetime  # Deadline for achieving the goal
 
 class FinancialGoalResponse(BaseModel):
@@ -96,6 +97,7 @@ class FinancialGoalResponse(BaseModel):
     targetAmount: float  # Target amount
     currentAmount: float  # Current progress
     category: str  # Category of the goal
+    name: str  # Name of the financial goal
     deadline: str  # Deadline for the goal (as string)
 
 class FinancialGoalUpdate(BaseModel):
@@ -106,6 +108,7 @@ class FinancialGoalUpdate(BaseModel):
     targetAmount: Optional[float] = None  # New target amount (optional)
     currentAmount: Optional[float] = None  # New current amount (optional)
     category: Optional[str] = None  # New category (optional)
+    name: Optional[str] = None  # New name (optional)
     deadline: Optional[datetime] = None  # New deadline (optional)
 
 # Database dependency

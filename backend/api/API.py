@@ -8,6 +8,7 @@ from pydantic import BaseModel
 from typing import List, Dict, Any, Optional
 from fastapi.middleware.cors import CORSMiddleware
 from datetime import datetime, timedelta
+import json
 
 # Add path to backend directory to import AI modules
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -63,6 +64,9 @@ class LoginResponse(BaseModel):
     message: str
     user_id: Optional[str] = None
     username: Optional[str] = None
+    firstName: Optional[str] = None
+    lastName: Optional[str] = None
+    email: Optional[str] = None
 
 class Student(BaseModel):
     """
@@ -135,6 +139,7 @@ class BudgetResponse(BaseModel):
     category: str
     amount: float
     period: str
+    spent: Optional[float] = 0
     created_at: Optional[str] = None
 
 # Financial analysis models
@@ -557,6 +562,183 @@ async def process_query(user_query: UserQuery):
         raise HTTPException(status_code=503, detail="AI features are not available")
     
     try:
+        # Get user data from database if user_id is provided
+        user_data = {}
+        user_id = None
+        if user_query.user_context and 'user_id' in user_query.user_context:
+            user_id = user_query.user_context['user_id']
+            # Fetch user profile data
+            users_collection = get_collection(Collections.USERS)
+            user = users_collection.find_one({"_id": ObjectId(user_id)})
+            
+            if user:
+                user_data['profile'] = {
+                    'name': user.get('name', ''),
+                    'email': user.get('email', ''),
+                    'year_in_school': user.get('year_in_school', ''),
+                    'major': user.get('major', '')
+                }
+                
+                # Fetch transaction data
+                transactions_collection = get_collection(Collections.TRANSACTIONS)
+                transactions = list(transactions_collection.find({"user_id": user_id}))
+                
+                # Calculate financial metrics
+                total_income = 0
+                total_expenses = 0
+                
+                # Categorize transactions with or without type field
+                for t in transactions:
+                    amount = t.get('amount', 0)
+                    
+                    # If transaction has a type field, use it
+                    if 'type' in t:
+                        if t['type'] == 'income':
+                            total_income += amount
+                        elif t['type'] == 'expense':
+                            total_expenses += amount
+                    # Otherwise infer type from amount or category
+                    else:
+                        # If transaction has a category, consider it an expense
+                        if t.get('category', '').strip() != '':
+                            total_expenses += amount
+                        # If no type and no category, use amount sign (positive = income, negative = expense)
+                        elif amount < 0:
+                            total_expenses += abs(amount)
+                        else:
+                            total_income += amount
+                
+                # Get category breakdown
+                category_spending = {}
+                for t in transactions:
+                    # Determine if this is an expense
+                    is_expense = False
+                    
+                    # Check if we have a transaction type field
+                    if "type" in t:
+                        is_expense = t["type"].lower() == "expense"
+                    # If no type field or type is not "expense", use category and amount
+                    if not is_expense:
+                        # Any transaction with a category is considered an expense
+                        category = t.get('category', '').strip()
+                        is_expense = category != ""
+                    
+                    # For expenses, add to the category breakdown
+                    if is_expense:
+                        category = t.get('category', 'Uncategorized')
+                        if not category or category.strip() == "":
+                            category = 'Uncategorized'
+                        
+                        # Convert to positive for easier understanding
+                        amount = abs(t.get('amount', 0))
+                        
+                        if category in category_spending:
+                            category_spending[category] += amount
+                        else:
+                            category_spending[category] = amount
+                
+                # Add financial data to user context
+                user_data['finances'] = {
+                    'total_income': total_income,
+                    'total_expenses': total_expenses,
+                    'category_spending': category_spending
+                }
+                
+                # Update user_context with the retrieved data
+                if not user_query.user_context:
+                    user_query.user_context = {}
+                user_query.user_context.update(user_data)
+        
+        # Check if the query is about food spending or specific categories
+        query_lower = user_query.query.lower()
+        spending_categories = ["food", "rent", "groceries", "dining", "housing", "transportation", 
+                            "utilities", "entertainment", "education", "health", "shopping"]
+        
+        # Enhanced pattern matching for spending queries
+        is_spending_query = any(
+            pattern in query_lower 
+            for category in spending_categories
+            for pattern in [
+                f"spent on {category}", 
+                f"spending on {category}", 
+                f"{category} expenses",
+                f"how much {category}",
+                f"how much on {category}",
+                f"how much for {category}",
+                f"how much did i spend on {category}",
+                f"how much money i spent on {category}",
+                f"how much have i spent on {category}",
+                f"money spent on {category}"
+            ]
+        )
+        
+        # If this is a spending query and we have a user_id, get specific category spending data
+        if is_spending_query and user_id:
+            # Detect which category the user is asking about
+            detected_category = None
+            for category in spending_categories:
+                patterns = [
+                    f"spent on {category}", 
+                    f"spending on {category}", 
+                    f"{category} expenses",
+                    f"how much {category}",
+                    f"how much on {category}",
+                    f"how much for {category}",
+                    f"how much did i spend on {category}",
+                    f"how much money i spent on {category}",
+                    f"how much have i spent on {category}",
+                    f"money spent on {category}"
+                ]
+                
+                if any(pattern in query_lower for pattern in patterns):
+                    detected_category = category
+                    break
+            
+            if detected_category:
+                # Get detailed spending data for this category
+                spending_data = get_category_spending(user_id, detected_category)
+                
+                # Format a detailed response about this category
+                if spending_data.get("transaction_count", 0) > 0:
+                    response_text = f"Based on your transaction history, you've spent ${spending_data['total_spent']:.2f} on {detected_category.capitalize()} "
+                    response_text += f"during the period {spending_data['time_period']}. "
+                    response_text += f"This represents {spending_data['percentage']:.1f}% of your total expenses. "
+                    
+                    # Add transaction examples if available
+                    if len(spending_data.get('transactions', [])) > 0:
+                        response_text += f"Your {detected_category} spending includes "
+                        transaction_samples = spending_data['transactions'][:3]  # Show up to 3 examples
+                        examples = []
+                        for t in transaction_samples:
+                            date_str = t.get('date')
+                            try:
+                                if isinstance(date_str, str) and 'T' in date_str:
+                                    date_obj = datetime.fromisoformat(date_str.split('T')[0])
+                                    formatted_date = date_obj.strftime('%b %d')
+                                else:
+                                    formatted_date = "Unknown date"
+                            except:
+                                formatted_date = "Unknown date"
+                                
+                            examples.append(f"${abs(t.get('amount', 0)):.2f} on {t.get('description', 'Unknown')} ({formatted_date})")
+                        
+                        response_text += ", ".join(examples)
+                        if len(spending_data['transactions']) > 3:
+                            response_text += f", and {len(spending_data['transactions']) - 3} more transactions."
+                        else:
+                            response_text += "."
+                    
+                    return {
+                        "status": "success",
+                        "response": response_text
+                    }
+                else:
+                    return {
+                        "status": "success",
+                        "response": f"Based on your transaction history, you haven't recorded any spending on {detected_category.capitalize()} yet."
+                    }
+        
+        # For regular queries, or if no category-specific data is found, use the AI assistant
         result = ai_assistant.process_user_query(user_query.query, user_query.user_context)
         return result
     except Exception as e:
@@ -582,7 +764,69 @@ async def get_spending_advice(user_data: UserProfile):
         raise HTTPException(status_code=503, detail="AI features are not available")
     
     try:
-        result = ai_assistant.get_spending_advice(user_data.dict())
+        # Convert to dict for easier manipulation
+        user_profile = user_data.dict()
+        
+        # Get user_id if provided
+        user_id = user_profile.get('user_id')
+        
+        # If user_id is provided, fetch additional data from database
+        if user_id:
+            # Fetch user's transactions
+            transactions_collection = get_collection(Collections.TRANSACTIONS)
+            transactions = list(transactions_collection.find({"user_id": user_id}))
+            
+            # Calculate financial metrics
+            total_income = sum(t['amount'] for t in transactions if t.get('type') == 'income')
+            total_expenses = sum(t['amount'] for t in transactions if t.get('type') == 'expense')
+            
+            # Get category breakdown
+            category_spending = {}
+            for t in transactions:
+                # Determine if this is an expense
+                is_expense = False
+                
+                # Check if we have a transaction type field
+                if "type" in t:
+                    is_expense = t["type"].lower() == "expense"
+                # If no type field or type is not "expense", use category and amount
+                if not is_expense:
+                    # Any transaction with a category is considered an expense
+                    category = t.get('category', '').strip()
+                    is_expense = category != ""
+                
+                # For expenses, add to the category breakdown
+                if is_expense:
+                    category = t.get('category', 'Uncategorized')
+                    if not category or category.strip() == "":
+                        category = 'Uncategorized'
+                    
+                    # Convert to positive for easier understanding
+                    amount = abs(t.get('amount', 0))
+                    
+                    if category in category_spending:
+                        category_spending[category] += amount
+                    else:
+                        category_spending[category] = amount
+            
+            # Get the top spending category
+            top_category = max(category_spending.items(), key=lambda x: x[1]) if category_spending else ('None', 0)
+            
+            # Fetch budget data
+            budgets_collection = get_collection(Collections.CATEGORY_BREAKDOWN)
+            budgets = list(budgets_collection.find({"user_id": user_id}))
+            
+            # Add to user profile data
+            user_profile['financial_data'] = {
+                'total_income': total_income,
+                'total_expenses': total_expenses,
+                'category_spending': category_spending,
+                'top_category': top_category[0],
+                'top_category_amount': top_category[1],
+                'budgets': budgets
+            }
+        
+        result = ai_assistant.get_spending_advice(user_profile)
         return result
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error getting spending advice: {str(e)}")
@@ -607,7 +851,83 @@ async def get_budget_template(user_profile: UserProfile):
         raise HTTPException(status_code=503, detail="AI features are not available")
     
     try:
-        result = ai_assistant.generate_budget_template(user_profile.dict())
+        # Convert to dict for easier manipulation
+        user_data = user_profile.dict()
+        
+        # Get user_id if provided
+        user_id = user_data.get('user_id')
+        
+        # If user_id is provided, fetch additional data from database
+        if user_id:
+            # Fetch user's transactions
+            transactions_collection = get_collection(Collections.TRANSACTIONS)
+            transactions = list(transactions_collection.find({"user_id": user_id}))
+            
+            # Calculate spending by category
+            category_spending = {}
+            for t in transactions:
+                # Determine if this is an expense
+                is_expense = False
+                
+                # Check if we have a transaction type field
+                if "type" in t:
+                    is_expense = t["type"].lower() == "expense"
+                # If no type field or type is not "expense", use category and amount
+                if not is_expense:
+                    # Any transaction with a category is considered an expense
+                    category = t.get('category', '').strip()
+                    is_expense = category != ""
+                
+                # For expenses, add to the category breakdown
+                if is_expense:
+                    category = t.get('category', 'Uncategorized')
+                    if not category or category.strip() == "":
+                        category = 'Uncategorized'
+                    
+                    # Convert to positive for easier understanding
+                    amount = abs(t.get('amount', 0))
+                    
+                    if category in category_spending:
+                        category_spending[category] += amount
+                    else:
+                        category_spending[category] = amount
+            
+            # Calculate income sources
+            income_sources = {}
+            for t in transactions:
+                # Determine if this is income
+                is_income = False
+                
+                # Check if we have a transaction type field
+                if "type" in t:
+                    is_income = t["type"].lower() == "income"
+                # If no type field, use amount (positive = income)
+                elif t.get('amount', 0) > 0 and not t.get('category', '').strip():
+                    is_income = True
+                
+                # For income, add to the income sources
+                if is_income:
+                    source = t.get('category', 'Other Income')
+                    if not source or source.strip() == "":
+                        source = 'Other Income'
+                    
+                    amount = abs(t.get('amount', 0))
+                    
+                    if source in income_sources:
+                        income_sources[source] += amount
+                    else:
+                        income_sources[source] = amount
+            
+            # Add to financial_data if it exists, or create it
+            if 'financial_data' not in user_data:
+                user_data['financial_data'] = {}
+                
+            user_data['financial_data'].update({
+                'category_spending': category_spending,
+                'income_sources': income_sources
+            })
+        
+        result = ai_assistant.generate_budget_template(user_data)
         return result
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error generating budget template: {str(e)}")
@@ -632,7 +952,51 @@ async def analyze_financial_goals(goals_data: FinancialGoals):
         raise HTTPException(status_code=503, detail="AI features are not available")
     
     try:
-        result = ai_assistant.analyze_financial_goals(goals_data.goals, goals_data.user_context)
+        # Create a copy to avoid modifying the original
+        goals = goals_data.goals.copy()
+        user_context = goals_data.user_context.copy() if goals_data.user_context else {}
+        
+        # Get user_id if provided
+        user_id = user_context.get('user_id')
+        
+        # If user_id is provided, fetch actual goals from database
+        if user_id:
+            # Fetch user's financial goals
+            goals_collection = get_collection(Collections.FINANCIAL_GOALS)
+            user_goals = list(goals_collection.find({"userId": user_id}))
+            
+            if user_goals:
+                # Use actual goals from database
+                goals = [goal.get('name', 'Unnamed Goal') for goal in user_goals]
+                
+                # Add goal details to context
+                user_context['goal_details'] = [
+                    {
+                        'name': goal.get('name', 'Unnamed Goal'),
+                        'target_amount': goal.get('targetAmount', 0),
+                        'current_amount': goal.get('currentAmount', 0),
+                        'category': goal.get('category', 'Other')
+                    }
+                    for goal in user_goals
+                ]
+                
+            # Fetch user's transactions for financial context
+            transactions_collection = get_collection(Collections.TRANSACTIONS)
+            transactions = list(transactions_collection.find({"user_id": user_id}))
+            
+            # Calculate income and expenses
+            total_income = sum(t['amount'] for t in transactions if t.get('type') == 'income')
+            total_expenses = sum(t['amount'] for t in transactions if t.get('type') == 'expense')
+            monthly_savings = total_income - total_expenses
+            
+            # Add financial details to context
+            user_context.update({
+                'monthly_income': total_income,
+                'monthly_expenses': total_expenses,
+                'monthly_savings': monthly_savings
+            })
+        
+        result = ai_assistant.analyze_financial_goals(goals, user_context)
         return result
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error analyzing financial goals: {str(e)}")
@@ -669,19 +1033,28 @@ async def login(login_data: LoginRequest):
         # Find the user by username
         user = users_collection.find_one({"username": login_data.username})
         
-        # Check if user exists and password matches
-        if user and user["password"] == login_data.password:  # In production, use proper password hashing
-            return {
-                "success": True,
-                "message": "Login successful",
-                "user_id": str(user["_id"]),
-                "username": user["username"]
-            }
-        else:
+        if not user:
             return {
                 "success": False,
                 "message": "Invalid username or password"
             }
+        
+        # Validate password (in a production app, compare hashed passwords)
+        if user["password"] != login_data.password:
+            return {
+                "success": False,
+                "message": "Invalid username or password"
+            }
+        
+        return {
+            "success": True,
+            "message": "Login successful",
+            "user_id": str(user["_id"]),
+            "username": user["username"],
+            "firstName": user.get("firstName", ""),
+            "lastName": user.get("lastName", ""),
+            "email": user.get("email", "")
+        }
     except Exception as e:
         return {
             "success": False,
@@ -693,7 +1066,8 @@ class RegisterRequest(BaseModel):
     username: str
     email: str
     password: str
-    name: str
+    firstName: str
+    lastName: str
 
 @app.post("/api/auth/register", response_model=LoginResponse)
 async def register(register_data: RegisterRequest):
@@ -729,7 +1103,8 @@ async def register(register_data: RegisterRequest):
             "username": register_data.username,
             "email": register_data.email,
             "password": register_data.password,  # In production, hash the password
-            "name": register_data.name,
+            "firstName": register_data.firstName,
+            "lastName": register_data.lastName,
             "createdAt": datetime.now()
         }
         
@@ -740,7 +1115,10 @@ async def register(register_data: RegisterRequest):
             "success": True,
             "message": "Registration successful",
             "user_id": str(result.inserted_id),
-            "username": register_data.username
+            "username": register_data.username,
+            "firstName": register_data.firstName,
+            "lastName": register_data.lastName,
+            "email": register_data.email
         }
     except Exception as e:
         return {
@@ -766,21 +1144,75 @@ async def create_transaction(transaction: TransactionRequest):
         
         # Create transaction document
         transaction_data = transaction.model_dump()
+        
+        # Ensure we have a date (default to now if not provided)
         if transaction_data.get("date") is None:
             transaction_data["date"] = datetime.now()
         
         # Insert the transaction
         result = transactions_collection.insert_one(transaction_data)
         
-        # Format the response
-        response_data = transaction_data.copy()
-        response_data["id"] = str(result.inserted_id)
-        response_data["date"] = response_data["date"].isoformat()
-        response_data["user_id"] = response_data.pop("user_id")  # Rename to match response model
+        # Update associated budget if the category has a budget
+        await update_budget_for_transaction(transaction_data)
         
+        # Create a copy of the transaction data for response
+        response_data = transaction_data.copy()
+        # Add the ID of the inserted document
+        response_data["id"] = str(result.inserted_id)
+        # Convert date to ISO format string for JSON response
+        if isinstance(response_data["date"], datetime):
+            response_data["date"] = response_data["date"].isoformat()
+            
         return response_data
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to create transaction: {str(e)}")
+
+async def update_budget_for_transaction(transaction):
+    """
+    Update the budget for a transaction's category.
+    
+    This helper function updates the appropriate budget when a transaction is created.
+    It finds the budget for the transaction's category and updates the current amount.
+    
+    Args:
+        transaction: Transaction data
+        
+    Returns:
+        None
+    """
+    try:
+        # Find budget with matching user ID and category
+        budgets_collection = get_collection(Collections.CATEGORY_BREAKDOWN)
+        budget = budgets_collection.find_one({
+            "user_id": transaction["user_id"],
+            "category": transaction["category"]
+        })
+        
+        # If no budget exists for this category, there's nothing to update
+        if not budget:
+            return
+        
+        # Now we actually update the budget to maintain a running total
+        # We'll add a field called 'spent' to track accumulated spending
+        
+        # Initialize spent field if it doesn't exist
+        spent = budget.get('spent', 0)
+        
+        # Add the absolute amount of the transaction to the spent total
+        # We use absolute value because transactions could be negative for expenses
+        # Budget tracking needs positive values regardless of transaction type
+        amount = abs(transaction["amount"])
+        updated_spent = spent + amount
+        
+        # Update the budget with the new spent amount
+        budgets_collection.update_one(
+            {"_id": budget["_id"]},
+            {"$set": {"spent": updated_spent}}
+        )
+        
+    except Exception as e:
+        # Log the error but don't fail the transaction creation
+        print(f"Error updating budget for transaction: {str(e)}")
 
 @app.get("/api/transactions/user/{user_id}", response_model=List[TransactionResponse])
 async def get_user_transactions(user_id: str):
@@ -803,9 +1235,13 @@ async def get_user_transactions(user_id: str):
         # Format the response
         response_data = []
         for transaction in transactions:
+            # Convert MongoDB _id to string
             transaction["id"] = str(transaction.pop("_id"))
+            
+            # Ensure date is in ISO format
             if isinstance(transaction["date"], datetime):
                 transaction["date"] = transaction["date"].isoformat()
+                
             response_data.append(transaction)
         
         return response_data
@@ -888,6 +1324,10 @@ async def get_user_budgets(user_id: str):
         # Format the response
         response_data = []
         for budget in budgets:
+            # Add spent field if it doesn't exist
+            if 'spent' not in budget:
+                budget['spent'] = 0
+                
             budget["id"] = str(budget.pop("_id"))
             if isinstance(budget.get("created_at"), datetime):
                 budget["created_at"] = budget["created_at"].isoformat()
@@ -896,6 +1336,85 @@ async def get_user_budgets(user_id: str):
         return response_data
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to get budgets: {str(e)}")
+
+@app.put("/api/budgets/{budget_id}", response_model=BudgetResponse)
+async def update_budget(budget_id: str, budget: BudgetRequest):
+    """
+    Update an existing budget.
+    
+    Args:
+        budget_id: ID of the budget to update
+        budget: Updated budget data from request body
+        
+    Returns:
+        Updated budget information
+    """
+    try:
+        # Get the budgets collection
+        budgets_collection = get_collection(Collections.CATEGORY_BREAKDOWN)
+        
+        # Check if budget exists
+        existing_budget = budgets_collection.find_one({"_id": ObjectId(budget_id)})
+        if not existing_budget:
+            raise HTTPException(status_code=404, detail="Budget not found")
+        
+        # Update budget document
+        budget_data = budget.model_dump()
+        
+        # Update the budget
+        budgets_collection.update_one(
+            {"_id": ObjectId(budget_id)},
+            {"$set": {
+                "category": budget_data["category"],
+                "amount": budget_data["amount"],
+                "period": budget_data["period"],
+                "updated_at": datetime.now()
+            }}
+        )
+        
+        # Get the updated budget
+        updated_budget = budgets_collection.find_one({"_id": ObjectId(budget_id)})
+        
+        # Format the response
+        response_data = {
+            "id": str(updated_budget["_id"]),
+            "user_id": updated_budget["user_id"],
+            "category": updated_budget["category"],
+            "amount": updated_budget["amount"],
+            "period": updated_budget["period"],
+            "created_at": updated_budget.get("created_at", datetime.now()).isoformat()
+        }
+        
+        return response_data
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to update budget: {str(e)}")
+
+@app.delete("/api/budgets/{budget_id}")
+async def delete_budget(budget_id: str):
+    """
+    Delete a budget.
+    
+    Args:
+        budget_id: ID of the budget to delete
+        
+    Returns:
+        Success message
+    """
+    try:
+        # Get the budgets collection
+        budgets_collection = get_collection(Collections.CATEGORY_BREAKDOWN)
+        
+        # Check if budget exists
+        existing_budget = budgets_collection.find_one({"_id": ObjectId(budget_id)})
+        if not existing_budget:
+            raise HTTPException(status_code=404, detail="Budget not found")
+        
+        # Delete the budget
+        budgets_collection.delete_one({"_id": ObjectId(budget_id)})
+        
+        return {"success": True, "message": "Budget deleted successfully"}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to delete budget: {str(e)}")
 
 # Financial analysis endpoints
 @app.get("/api/analysis/spending/{user_id}", response_model=SpendingAnalysisResponse)
@@ -957,8 +1476,20 @@ async def get_spending_analysis(
             amount = transaction["amount"]
             category = transaction["category"]
             
-            # Only count expenses (negative amounts) for spending analysis
-            if amount < 0:
+            # Determine if this is an expense based on amount, type, and category
+            is_expense = False
+            
+            # Check if we have a transaction type field
+            if "type" in transaction:
+                is_expense = transaction["type"].lower() == "expense"
+            # If no type field or type is not "expense", use category and amount
+            if not is_expense:
+                # Consider all categorized transactions as expenses
+                # Changed: Any transaction with a category is considered an expense, not just negative amounts
+                is_expense = category and category.strip() != ""
+            
+            # For expenses, add to the category breakdown
+            if is_expense:
                 # Convert to positive for easier understanding
                 amount = abs(amount)
                 total_spending += amount
@@ -1067,4 +1598,527 @@ async def get_spending_insights(user_id: str):
         }
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to get spending insights: {str(e)}")
+
+class UserProfileUpdateRequest(BaseModel):
+    """Model for updating user profile information"""
+    firstName: Optional[str] = None
+    lastName: Optional[str] = None
+    email: Optional[str] = None
+    phone: Optional[str] = None
+
+class UserProfileResponse(BaseModel):
+    """Model for user profile response"""
+    userId: str
+    username: str
+    firstName: Optional[str] = None
+    lastName: Optional[str] = None
+    email: Optional[str] = None
+    phone: Optional[str] = None
+
+class PasswordUpdateRequest(BaseModel):
+    """Model for updating user password"""
+    currentPassword: str
+    newPassword: str
+
+@app.get("/api/users/{user_id}/profile", response_model=UserProfileResponse)
+async def get_user_profile(user_id: str):
+    """
+    Get profile information for a specific user.
+    
+    Args:
+        user_id: ID of the user
+        
+    Returns:
+        User profile information
+    """
+    try:
+        # Get the users collection
+        users_collection = get_collection(Collections.USERS)
+        
+        # Find the user by ID
+        user = users_collection.find_one({"_id": ObjectId(user_id)})
+        
+        if not user:
+            raise HTTPException(status_code=404, detail="User not found")
+        
+        # Split the name into first and last name if available
+        name_parts = user.get("name", "").split(" ", 1)
+        first_name = name_parts[0] if len(name_parts) > 0 else ""
+        last_name = name_parts[1] if len(name_parts) > 1 else ""
+        
+        # Format the response
+        return {
+            "userId": str(user["_id"]),
+            "username": user.get("username", ""),
+            "firstName": user.get("firstName", first_name),
+            "lastName": user.get("lastName", last_name),
+            "email": user.get("email", ""),
+            "phone": user.get("phone", "")
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to get user profile: {str(e)}")
+
+@app.put("/api/users/{user_id}/profile", response_model=UserProfileResponse)
+async def update_user_profile(user_id: str, profile_data: UserProfileUpdateRequest):
+    """
+    Update profile information for a specific user.
+    
+    Args:
+        user_id: ID of the user
+        profile_data: Profile data to update
+        
+    Returns:
+        Updated user profile information
+    """
+    try:
+        # Get the users collection
+        users_collection = get_collection(Collections.USERS)
+        
+        # Find the user by ID
+        user = users_collection.find_one({"_id": ObjectId(user_id)})
+        
+        if not user:
+            raise HTTPException(status_code=404, detail="User not found")
+        
+        # Create update document with only non-None fields
+        update_data = {k: v for k, v in profile_data.model_dump().items() if v is not None}
+        
+        if update_data:
+            # Update the user
+            users_collection.update_one(
+                {"_id": ObjectId(user_id)},
+                {"$set": update_data}
+            )
+        
+        # Get the updated user
+        updated_user = users_collection.find_one({"_id": ObjectId(user_id)})
+        
+        # Format the response
+        return {
+            "userId": str(updated_user["_id"]),
+            "username": updated_user.get("username", ""),
+            "firstName": updated_user.get("firstName", ""),
+            "lastName": updated_user.get("lastName", ""),
+            "email": updated_user.get("email", ""),
+            "phone": updated_user.get("phone", "")
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to update user profile: {str(e)}")
+
+@app.put("/api/users/{user_id}/password")
+async def update_user_password(user_id: str, password_data: PasswordUpdateRequest):
+    """
+    Update password for a specific user.
+    
+    Args:
+        user_id: ID of the user
+        password_data: Current and new password
+        
+    Returns:
+        Success message
+    """
+    try:
+        # Get the users collection
+        users_collection = get_collection(Collections.USERS)
+        
+        # Find the user by ID
+        user = users_collection.find_one({"_id": ObjectId(user_id)})
+        
+        if not user:
+            raise HTTPException(status_code=404, detail="User not found")
+        
+        # Verify current password
+        if user.get("password") != password_data.currentPassword:
+            return {"success": False, "message": "Current password is incorrect"}
+        
+        # Update the password
+        users_collection.update_one(
+            {"_id": ObjectId(user_id)},
+            {"$set": {"password": password_data.newPassword}}
+        )
+        
+        return {"success": True, "message": "Password updated successfully"}
+    except Exception as e:
+        return {"success": False, "message": f"Failed to update password: {str(e)}"}
+
+# Financial Goal models
+class GoalCreate(BaseModel):
+    """Model for creating a new financial goal"""
+    name: str
+    category: str
+    targetAmount: float
+    currentAmount: float
+    targetDate: datetime
+
+class GoalResponse(BaseModel):
+    """Model for goal response"""
+    id: Optional[str] = None
+    name: str
+    category: str
+    targetAmount: float
+    currentAmount: float
+    targetDate: str
+
+# Financial Goal endpoints
+@app.post("/api/goals")
+async def create_goal(goal: GoalCreate, request: Request):
+    """
+    Create a new financial goal.
+    
+    Args:
+        goal: Goal data from request body
+        request: Request object containing authentication info
+        
+    Returns:
+        Created goal information
+    """
+    try:
+        # Get the goals collection
+        goals_collection = get_collection(Collections.FINANCIAL_GOALS)
+        
+        # Create goal document with current user ID
+        goal_data = goal.model_dump()
+        
+        # Get user ID from authentication
+        # In a real app, this would come from the auth token
+        # For now, we'll get it from the user stored in session or use a default
+        user_id = None
+        user_str = request.cookies.get("user") or request.headers.get("authorization")
+        
+        if user_str:
+            try:
+                if user_str.startswith("Bearer "):
+                    user_str = user_str[7:]  # Remove "Bearer " prefix
+                user_data = json.loads(user_str)
+                user_id = user_data.get("id") or user_data.get("user_id")
+            except:
+                pass
+        
+        # Fallback to default user ID if not found
+        if not user_id:
+            user_id = "current_user_id"  # Fallback ID
+            
+        goal_data["userId"] = user_id
+        
+        # Insert the goal
+        result = goals_collection.insert_one(goal_data)
+        
+        # Format the response - Create a new dict instead of modifying the original
+        response_data = {
+            "id": str(result.inserted_id),
+            "name": goal_data["name"],
+            "category": goal_data["category"],
+            "targetAmount": goal_data["targetAmount"],
+            "currentAmount": goal_data["currentAmount"],
+            "userId": goal_data["userId"]
+        }
+        
+        # Convert date to ISO format string for JSON response
+        if isinstance(goal_data.get("targetDate"), datetime):
+            response_data["targetDate"] = goal_data["targetDate"].isoformat()
+        else:
+            response_data["targetDate"] = goal_data.get("targetDate")
+            
+        return response_data
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to create goal: {str(e)}")
+
+@app.get("/api/goals")
+async def get_goals(request: Request):
+    """
+    Get all financial goals for the current user.
+    
+    Args:
+        request: Request object containing authentication info
+        
+    Returns:
+        List of goals
+    """
+    try:
+        # Get the goals collection
+        goals_collection = get_collection(Collections.FINANCIAL_GOALS)
+        
+        # Get user ID from authentication
+        # In a real app, this would come from the auth token
+        # For now, we'll get it from the user stored in session or use a default
+        user_id = None
+        user_str = request.cookies.get("user") or request.headers.get("authorization")
+        
+        if user_str:
+            try:
+                if user_str and user_str.startswith("Bearer "):
+                    user_str = user_str[7:]  # Remove "Bearer " prefix
+                user_data = json.loads(user_str)
+                user_id = user_data.get("id") or user_data.get("user_id")
+            except:
+                pass
+        
+        # Fallback to default user ID if not found
+        if not user_id:
+            user_id = "current_user_id"  # Fallback ID
+        
+        # Find goals for the user
+        goals = list(goals_collection.find({"userId": user_id}))
+        
+        # Format the response
+        response_data = []
+        for goal in goals:
+            # Create a new dict with properly converted values
+            goal_data = {
+                "id": str(goal["_id"]),
+                "name": goal.get("name", ""),
+                "category": goal.get("category", ""),
+                "targetAmount": goal.get("targetAmount", 0),
+                "currentAmount": goal.get("currentAmount", 0),
+                "userId": goal.get("userId", "")
+            }
+            
+            # Ensure date is in ISO format
+            if isinstance(goal.get("targetDate"), datetime):
+                goal_data["targetDate"] = goal["targetDate"].isoformat()
+            else:
+                goal_data["targetDate"] = str(goal.get("targetDate", ""))
+                
+            response_data.append(goal_data)
+        
+        return response_data
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to get goals: {str(e)}")
+
+@app.get("/api/goals/user/{user_id}")
+async def get_user_goals(user_id: str):
+    """
+    Get all financial goals for a specific user.
+    
+    Args:
+        user_id: ID of the user
+        
+    Returns:
+        List of goals
+    """
+    try:
+        # Validate user_id
+        if not user_id or user_id.strip() == "":
+            return []
+        
+        # Get the goals collection
+        goals_collection = get_collection(Collections.FINANCIAL_GOALS)
+        
+        # Find goals for the user - try both with userId and user_id fields
+        goals = list(goals_collection.find({"$or": [{"userId": user_id}, {"user_id": user_id}]}))
+        
+        # Format the response
+        response_data = []
+        for goal in goals:
+            # Create a new dict with properly converted values
+            goal_data = {
+                "id": str(goal["_id"]),
+                "name": goal.get("name", ""),
+                "category": goal.get("category", ""),
+                "targetAmount": goal.get("targetAmount", 0),
+                "currentAmount": goal.get("currentAmount", 0),
+                "userId": goal.get("userId", "") or goal.get("user_id", "")
+            }
+            
+            # Ensure date is in ISO format
+            if isinstance(goal.get("targetDate"), datetime):
+                goal_data["targetDate"] = goal["targetDate"].isoformat()
+            else:
+                goal_data["targetDate"] = str(goal.get("targetDate", ""))
+                
+            response_data.append(goal_data)
+        
+        return response_data
+    except Exception as e:
+        # Log the error but return empty list instead of raising an exception
+        print(f"Error getting user goals: {str(e)}")
+        return []
+
+@app.put("/api/goals/{goal_id}")
+async def update_goal(goal_id: str, goal: GoalCreate):
+    """
+    Update an existing financial goal.
+    
+    Args:
+        goal_id: ID of the goal to update
+        goal: Updated goal data from request body
+        
+    Returns:
+        Updated goal information
+    """
+    try:
+        # Get the goals collection
+        goals_collection = get_collection(Collections.FINANCIAL_GOALS)
+        
+        # Check if goal exists
+        existing_goal = goals_collection.find_one({"_id": ObjectId(goal_id)})
+        if not existing_goal:
+            raise HTTPException(status_code=404, detail="Goal not found")
+        
+        # Update goal document
+        goal_data = goal.model_dump()
+        
+        # Update the goal
+        goals_collection.update_one(
+            {"_id": ObjectId(goal_id)},
+            {"$set": {
+                "name": goal_data["name"],
+                "category": goal_data["category"],
+                "targetAmount": goal_data["targetAmount"],
+                "currentAmount": goal_data["currentAmount"],
+                "targetDate": goal_data["targetDate"],
+                "updatedAt": datetime.now()
+            }}
+        )
+        
+        # Get the updated goal
+        updated_goal = goals_collection.find_one({"_id": ObjectId(goal_id)})
+        
+        # Format the response with safe access to keys
+        response_data = {
+            "id": str(updated_goal["_id"]),
+            "name": updated_goal.get("name", ""),
+            "category": updated_goal.get("category", ""),
+            "targetAmount": updated_goal.get("targetAmount", 0),
+            "currentAmount": updated_goal.get("currentAmount", 0),
+            "userId": updated_goal.get("userId", "")
+        }
+        
+        # Handle the date format safely
+        if isinstance(updated_goal.get("targetDate"), datetime):
+            response_data["targetDate"] = updated_goal["targetDate"].isoformat()
+        else:
+            response_data["targetDate"] = str(updated_goal.get("targetDate", ""))
+        
+        return response_data
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to update goal: {str(e)}")
+
+@app.delete("/api/goals/{goal_id}")
+async def delete_goal(goal_id: str):
+    """
+    Delete a financial goal.
+    
+    Args:
+        goal_id: ID of the goal to delete
+        
+    Returns:
+        Success message
+    """
+    try:
+        # Get the goals collection
+        goals_collection = get_collection(Collections.FINANCIAL_GOALS)
+        
+        # Check if goal exists
+        existing_goal = goals_collection.find_one({"_id": ObjectId(goal_id)})
+        if not existing_goal:
+            raise HTTPException(status_code=404, detail="Goal not found")
+        
+        # Delete the goal
+        goals_collection.delete_one({"_id": ObjectId(goal_id)})
+        
+        return {"success": True, "message": "Goal deleted successfully"}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to delete goal: {str(e)}")
+
+def get_category_spending(user_id, category='Food'):
+    """
+    Get spending data for a specific category from a user's transaction history.
+    
+    Args:
+        user_id: ID of the user whose spending to analyze
+        category: The spending category to analyze (default: 'Food')
+        
+    Returns:
+        Dictionary containing:
+        - total_spent: Total amount spent in the category
+        - transactions: List of transactions in the category
+        - percentage: Percentage of total expenses this category represents
+        - time_period: Period covered by the data
+    """
+    try:
+        # Get the transactions collection
+        transactions_collection = get_collection(Collections.TRANSACTIONS)
+        
+        # Filter transactions for the user and category
+        # NOTE: Category matching handles case variations (Food, food, FOOD)
+        query = {
+            "user_id": user_id,
+            "$or": [
+                {"category": {"$regex": f"^{category}$", "$options": "i"}},  # Exact match with case insensitivity
+                {"category": {"$regex": f"{category}", "$options": "i"}}  # Contains category name
+            ]
+        }
+        
+        category_transactions = list(transactions_collection.find(query))
+        
+        # Calculate total spent in this category
+        total_spent = sum(transaction['amount'] for transaction in category_transactions)
+        
+        # Get all expenses to calculate percentage - handle transactions with or without type field
+        all_expenses_query = {
+            "user_id": user_id,
+            "$or": [
+                {"type": "expense"},  # Transactions with type=expense
+                {"category": {"$exists": True, "$ne": ""}}  # Transactions with a category (assumed to be expenses)
+            ]
+        }
+        all_expenses = list(transactions_collection.find(all_expenses_query))
+        
+        # Sum all expenses, considering transactions with explicit type or just by category
+        total_expenses = 0
+        for transaction in all_expenses:
+            # If the transaction has a type field and it's not 'expense', skip it
+            if 'type' in transaction and transaction['type'] != 'expense':
+                continue
+            # Add the transaction amount to total expenses
+            total_expenses += transaction['amount']
+        
+        # Calculate percentage of total expenses
+        percentage = (total_spent / total_expenses * 100) if total_expenses > 0 else 0
+        
+        # Determine time period for the data (from oldest to newest transaction)
+        if category_transactions:
+            oldest_transaction = min(category_transactions, key=lambda t: t.get('date', datetime.now()))
+            newest_transaction = max(category_transactions, key=lambda t: t.get('date', datetime.now()))
+            
+            if 'date' in oldest_transaction and 'date' in newest_transaction:
+                oldest_date = oldest_transaction['date']
+                newest_date = newest_transaction['date']
+                if isinstance(oldest_date, datetime) and isinstance(newest_date, datetime):
+                    time_period = f"{oldest_date.strftime('%b %d, %Y')} to {newest_date.strftime('%b %d, %Y')}"
+                else:
+                    time_period = "All time"
+            else:
+                time_period = "All time"
+        else:
+            time_period = "All time"
+        
+        # Format transaction data for response
+        transactions_data = [
+            {
+                "description": t.get('description', 'No description'),
+                "amount": t.get('amount', 0),
+                "date": t.get('date').isoformat() if isinstance(t.get('date'), datetime) else str(t.get('date', '')),
+                "category": t.get('category', 'Unknown')
+            }
+            for t in category_transactions
+        ]
+        
+        return {
+            "total_spent": total_spent,
+            "transactions": transactions_data,
+            "percentage": percentage,
+            "time_period": time_period,
+            "transaction_count": len(category_transactions)
+        }
+    except Exception as e:
+        return {
+            "error": f"Error retrieving {category} spending data: {str(e)}",
+            "total_spent": 0,
+            "transactions": [],
+            "percentage": 0,
+            "time_period": "Unknown",
+            "transaction_count": 0
+        }
 
