@@ -40,7 +40,7 @@ const Login = () => {
     try {
       const result = await login(username, password);
       if (result.success) {
-        navigate('/');
+        navigate('/dashboard');
       } else {
         setFormError(result.message || 'Invalid username or password');
       }

@@ -1,4 +1,6 @@
+// Import necessary React hooks for state management, side effects, and DOM references
 import React, { useState, useEffect, useRef } from 'react';
+// Import Material UI components for building the user interface
 import {
   Container,
   Typography,
@@ -13,21 +15,26 @@ import {
   InputAdornment,
   Grid
 } from '@mui/material';
+// Import Material UI icons for visual elements
 import SendIcon from '@mui/icons-material/Send';
 import DeleteOutlineIcon from '@mui/icons-material/DeleteOutline';
 import AccountBalanceWalletIcon from '@mui/icons-material/AccountBalanceWallet';
 import CalculateIcon from '@mui/icons-material/Calculate';
 import TrendingUpIcon from '@mui/icons-material/TrendingUp';
 import SavingsIcon from '@mui/icons-material/Savings';
+// Import styled components API from Material UI
 import { styled } from '@mui/material/styles';
+// Import services to interact with the backend API
 import transactionService from '../services/transactionService';
 import budgetService from '../services/budgetService';
 import goalService from '../services/goalService';
 import aiService from '../services/aiService';
-import { useAuth } from '../context/AuthContext'; // Import auth context
+// Import authentication context to access current user information
+import { useAuth } from '../context/AuthContext';
 import authService from '../services/authService';
 
-// Styled components
+// Create styled message bubble component for chat interface
+// Different styling based on whether the message is from the user or assistant
 const MessageBubble = styled(Paper)(({ theme, sender }) => ({
   padding: theme.spacing(1.5),
   borderRadius: sender === 'user' ? '18px 18px 0 18px' : '18px 18px 18px 0',
@@ -38,6 +45,7 @@ const MessageBubble = styled(Paper)(({ theme, sender }) => ({
   wordBreak: 'break-word'
 }));
 
+// Create styled suggestion card component for clickable suggestions
 const SuggestionCard = styled(Card)(({ theme }) => ({
   padding: theme.spacing(1.5),
   marginBottom: theme.spacing(1),
@@ -49,16 +57,26 @@ const SuggestionCard = styled(Card)(({ theme }) => ({
   }
 }));
 
+// Main AI Assistant component
 const AIAssistant = () => {
-  const { currentUser } = useAuth(); // Get current user from auth context
+  // Access current user data from authentication context
+  const { currentUser } = useAuth();
+  
+  // Initialize state for chat messages with a welcome message
   const [messages, setMessages] = useState([
     { 
       sender: 'assistant', 
       text: "Hi there! I'm your financial assistant. I'll use your profile information to provide personalized advice. Feel free to ask me anything about your finances."
     }
   ]);
+  
+  // State for the input field text
   const [input, setInput] = useState('');
+  
+  // State to track loading status during API calls
   const [loading, setLoading] = useState(false);
+  
+  // State to store user's financial data for personalized advice
   const [financialData, setFinancialData] = useState({
     totalIncome: 0,
     totalExpenses: 0,
@@ -67,7 +85,11 @@ const AIAssistant = () => {
     goalProgress: 0,
     goalTimeRemaining: 0
   });
+  
+  // Reference to the messages container end for auto-scrolling
   const messagesEndRef = useRef(null);
+  
+  // State to store user profile information
   const [userProfile, setUserProfile] = useState({
     year_in_school: '',
     major: '',
@@ -75,22 +97,25 @@ const AIAssistant = () => {
     financial_aid: 0
   });
 
-  // Fetch user profile data when component mounts
+  // Effect to fetch user profile data when component mounts and user is authenticated
   useEffect(() => {
     if (currentUser) {
-      // Try to load user profile from auth context
       fetchUserProfile();
     }
   }, [currentUser]);
 
+  // Effect to fetch financial data when component mounts
   useEffect(() => {
     fetchFinancialData();
   }, []);
 
+  // Effect to scroll to bottom of messages when messages update
   useEffect(() => {
     scrollToBottom();
   }, [messages]);
 
+  // Effect to check for financial and profile data status
+  // If data is missing, show a message and try to fetch profile
   useEffect(() => {
     // Check if we have financial data
     const hasFinancialData = financialData.totalIncome > 0 || financialData.totalExpenses > 0;
@@ -117,6 +142,8 @@ const AIAssistant = () => {
   }, [financialData, userProfile, currentUser]);
 
   // Function to fetch user profile data from the database
+  // Uses the authentication service to get profile information
+  // Updates state with profile data or uses defaults if not available
   const fetchUserProfile = async () => {
     try {
       // Use currentUser from auth context to fetch profile data
@@ -156,6 +183,9 @@ const AIAssistant = () => {
     }
   };
 
+  // Function to fetch and calculate user's financial data
+  // Retrieves transactions, budgets, and goals data
+  // Performs calculations to derive financial metrics
   const fetchFinancialData = async () => {
     try {
       // Fetch transactions, budgets, and goals data in parallel for efficiency
@@ -165,22 +195,22 @@ const AIAssistant = () => {
         goalService.getGoals()
       ]);
 
-      // Calculate financial metrics
-      // Income calculations
+      // Calculate income from income-type transactions
       const income = transactions
         .filter(t => t.type === 'income')
         .reduce((sum, t) => sum + t.amount, 0);
       
-      // Expense calculations
+      // Calculate expenses from expense-type transactions
       const expenses = transactions
         .filter(t => t.type === 'expense')
         .reduce((sum, t) => sum + t.amount, 0);
       
-      // Calculate monthly savings
+      // Calculate monthly savings (income minus expenses)
       const monthlySavings = income - expenses;
+      // Calculate savings rate as a percentage of income
       const savingsRate = income > 0 ? (monthlySavings / income) * 100 : 0;
       
-      // Find top spending categories
+      // Group expenses by category to find spending patterns
       const categorySpendings = transactions
         .filter(t => t.type === 'expense')
         .reduce((acc, t) => {
@@ -190,23 +220,23 @@ const AIAssistant = () => {
           return acc;
         }, {});
       
-      // Sort categories by spending amount
+      // Sort categories by spending amount (highest first)
       const sortedCategories = Object.entries(categorySpendings)
         .sort((a, b) => b[1] - a[1]);
       
-      // Get top 3 categories
+      // Extract top 3 spending categories with amounts and percentages
       const topCategories = sortedCategories.slice(0, 3).map(([category, amount]) => ({
         category,
         amount,
         percentage: expenses > 0 ? (amount / expenses) * 100 : 0
       }));
       
-      // Default if no categories found
+      // Get the top spending category or use 'Uncategorized' if none exists
       const topCategoryEntry = sortedCategories.length > 0 
         ? sortedCategories[0] 
         : ['Uncategorized', 0];
       
-      // Budget utilization - compare spending against budgets
+      // Compare actual spending against budget categories
       const budgetUtilization = budgets.map(budget => {
         const spent = categorySpendings[budget.category] || 0;
         const percentage = budget.amount > 0 ? (spent / budget.amount) * 100 : 0;
@@ -219,7 +249,7 @@ const AIAssistant = () => {
         };
       });
       
-      // Calculate overall budget status
+      // Calculate overall budget status across all categories
       const totalBudgeted = budgets.reduce((sum, b) => sum + b.amount, 0);
       const budgetStatus = totalBudgeted > 0 
         ? { 
@@ -230,13 +260,14 @@ const AIAssistant = () => {
           }
         : null;
       
-      // Goal progress and timeline
+      // Initialize goal tracking variables
       let goalProgress = 0;
       let goalTimeRemaining = 0;
       let goalDetails = [];
       
+      // Calculate progress for each financial goal
       if (goals.length > 0) {
-        // Calculate progress for all goals
+        // Map each goal to include progress and time remaining calculations
         goalDetails = goals.map(goal => {
           const progress = Math.round((goal.currentAmount / goal.targetAmount) * 100);
           const timeRemaining = monthlySavings > 0 
@@ -253,10 +284,11 @@ const AIAssistant = () => {
           };
         });
         
-        // Use primary goal for main display
+        // Use the first goal as the primary goal for summary display
         const primaryGoal = goals[0];
         goalProgress = Math.round((primaryGoal.currentAmount / primaryGoal.targetAmount) * 100);
         
+        // Calculate time remaining to reach the primary goal based on current savings rate
         if (monthlySavings > 0) {
           const remaining = primaryGoal.targetAmount - primaryGoal.currentAmount;
           goalTimeRemaining = Math.ceil(remaining / monthlySavings);
@@ -265,7 +297,7 @@ const AIAssistant = () => {
         }
       }
 
-      // Set comprehensive financial data
+      // Update financial data state with all calculated metrics
       setFinancialData({
         // Basic metrics
         totalIncome: income,
@@ -293,14 +325,18 @@ const AIAssistant = () => {
     }
   };
 
+  // Function to scroll chat to the bottom when new messages are added
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   };
 
+  // Handler for input field changes
   const handleInputChange = (e) => {
     setInput(e.target.value);
   };
 
+  // Handler for sending user messages to the AI
+  // Adds user message to chat, sends query to AI service, displays response
   const handleSendMessage = async () => {
     if (!input.trim()) return;
 
@@ -358,7 +394,8 @@ const AIAssistant = () => {
     }
   };
 
-  // Helper function to categorize the query
+  // Helper function to categorize user queries by topic
+  // Used to generate relevant follow-up suggestions
   const categorizeQuery = (query) => {
     const lowerQuery = query.toLowerCase();
     if (lowerQuery.includes('budget') || lowerQuery.includes('spend')) {
@@ -374,7 +411,8 @@ const AIAssistant = () => {
     }
   };
 
-  // Helper function to add a relevant suggestion based on query
+  // Helper function to add contextual suggestions based on query category
+  // Makes the chat more interactive and helps guide the user
   const addRelevantSuggestion = (query) => {
     const queryType = categorizeQuery(query);
     
@@ -402,6 +440,8 @@ const AIAssistant = () => {
     ]);
   };
 
+  // Handler for Enter key in the input field
+  // Allows sending messages with Enter (without Shift)
   const handleKeyPress = (e) => {
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
@@ -409,12 +449,16 @@ const AIAssistant = () => {
     }
   };
 
+  // Handler for clicking on suggestion cards
+  // Sets the suggestion text as input and sends it
   const handleSuggestionClick = (suggestion) => {
     setInput(suggestion);
     // Auto-send the suggestion
     handleSuggestionInput(suggestion);
   };
 
+  // Handler for processing suggestion input
+  // Similar to handleSendMessage but specifically for suggestions
   const handleSuggestionInput = async (suggestionText) => {
     if (!suggestionText.trim()) return;
     
@@ -474,13 +518,16 @@ const AIAssistant = () => {
     }
   };
 
+  // Handler to clear chat history
+  // Resets the messages array with just a welcome message
   const handleClearChat = () => {
     setMessages([
       { sender: 'assistant', text: "Chat history cleared. How can I help you today?" }
     ]);
   };
 
-  // Function to get personalized spending advice
+  // Function to get personalized spending advice based on user profile
+  // Sends profile data to AI service, displays advice in staggered messages
   const getPersonalizedAdvice = async () => {
     setLoading(true);
     try {
@@ -513,7 +560,7 @@ const AIAssistant = () => {
           { sender: 'assistant', text: `Based on your profile (${userProfile.year_in_school} studying ${userProfile.major}), here's some personalized advice:` }
         ]);
         
-        // Add advice points
+        // Add advice points one by one with delay for better readability
         if (advice.advice && advice.advice.length > 0) {
           advice.advice.forEach((tip, index) => {
             setTimeout(() => {
@@ -560,7 +607,8 @@ const AIAssistant = () => {
     }
   };
 
-  // Function to analyze financial goals
+  // Function to analyze user's financial goals and provide recommendations
+  // Gets goal data, sends to AI service, displays analysis and recommendations
   const analyzeFinancialGoals = async () => {
     setLoading(true);
     try {
@@ -597,7 +645,7 @@ const AIAssistant = () => {
           { sender: 'assistant', text: analysis.analysis || "Here's an analysis of your financial goals:" }
         ]);
         
-        // Add recommendations if available
+        // Add recommendations if available with staggered timing
         if (analysis.recommendations && analysis.recommendations.length > 0) {
           setTimeout(() => {
             setMessages(prev => [
@@ -632,7 +680,8 @@ const AIAssistant = () => {
     }
   };
 
-  // Function to show user profile information
+  // Function to display user profile information
+  // Either shows existing profile data or informs user they need to log in
   const showProfileForm = () => {
     if (currentUser && currentUser.userId) {
       setMessages(prev => [
@@ -655,7 +704,8 @@ const AIAssistant = () => {
     scrollToBottom();
   };
 
-  // Update quick suggestions to include a profile data option
+  // Quick suggestion buttons to display below the chat
+  // Each has text, icon, and action to perform when clicked
   const quickSuggestions = [
     { 
       text: "How's my budget this month?", 
@@ -679,7 +729,8 @@ const AIAssistant = () => {
     }
   ];
 
-  // Add a handler for user profile input changes
+  // Handler for user profile input changes
+  // Updates the userProfile state when form fields change
   const handleProfileChange = (e) => {
     const { name, value } = e.target;
     setUserProfile(prev => ({
@@ -688,7 +739,8 @@ const AIAssistant = () => {
     }));
   };
 
-  // Add a handler to submit the profile data
+  // Handler to submit profile data for personalized advice
+  // Saves profile to database if user is logged in, then gets advice
   const handleProfileSubmit = async () => {
     setLoading(true);
     try {
@@ -753,9 +805,11 @@ const AIAssistant = () => {
     }
   };
 
+  // Component render - UI for the AI Assistant
   return (
     <Container maxWidth="md">
       <Box sx={{ mt: 4, mb: 4 }}>
+        {/* Header with title and clear chat button */}
         <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
           <Typography variant="h4" component="h1" gutterBottom>
             Financial Assistant
@@ -765,6 +819,7 @@ const AIAssistant = () => {
           </IconButton>
         </Box>
 
+        {/* Main chat container */}
         <Paper 
           elevation={3} 
           sx={{ 
@@ -774,7 +829,7 @@ const AIAssistant = () => {
             overflow: 'hidden'
           }}
         >
-          {/* Messages Area */}
+          {/* Messages display area */}
           <Box 
             sx={{ 
               p: 2, 
@@ -784,6 +839,7 @@ const AIAssistant = () => {
               flexDirection: 'column'
             }}
           >
+            {/* Map through messages array to display each message */}
             {messages.map((message, index) => (
               <Box 
                 key={index} 

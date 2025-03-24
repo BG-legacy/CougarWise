@@ -228,7 +228,7 @@ const Landing = () => {
                   <Typography variant="body1" paragraph>
                     Create customized budgets that fit your college lifestyle and track your spending habits.
                   </Typography>
-                  <RedButton onClick={() => navigate('/budget')}>Learn More</RedButton>
+                  <RedButton onClick={() => navigate('/dashboard/budget')}>Learn More</RedButton>
                 </FeatureCard>
               </StyledMotionDiv>
             </Grid>
@@ -247,7 +247,7 @@ const Landing = () => {
                   <Typography variant="body1" paragraph>
                     Get insights into your spending patterns with visual graphs and detailed reports.
                   </Typography>
-                  <RedButton onClick={() => navigate('/analysis')}>Learn More</RedButton>
+                  <RedButton onClick={() => navigate('/dashboard/analysis')}>Learn More</RedButton>
                 </FeatureCard>
               </StyledMotionDiv>
             </Grid>
@@ -266,7 +266,7 @@ const Landing = () => {
                   <Typography variant="body1" paragraph>
                     Receive personalized financial advice and answers to your money management questions.
                   </Typography>
-                  <RedButton onClick={() => navigate('/aiassistant')}>Learn More</RedButton>
+                  <RedButton onClick={() => navigate('/dashboard/assistant')}>Learn More</RedButton>
                 </FeatureCard>
               </StyledMotionDiv>
             </Grid>

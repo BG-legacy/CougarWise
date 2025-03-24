@@ -32,14 +32,26 @@ To start the API server, run from the backend directory:
 python run.py
 ```
 
-Alternatively, you can run it directly from the api directory:
+## Docker Setup
 
-```bash
-cd api
-python run_server.py
-```
+You can also run the backend using Docker:
 
-The server will start on the port specified in your `.env` file (default: 8000).
+1. Build and start the Docker container:
+   ```bash
+   docker-compose up --build
+   ```
+
+2. To run in detached mode:
+   ```bash
+   docker-compose up -d
+   ```
+
+3. To stop the Docker container:
+   ```bash
+   docker-compose down
+   ```
+
+Note: The Docker setup will automatically use the `.env` file for configuration and expose the API on port 8000.
 
 ## Troubleshooting
 

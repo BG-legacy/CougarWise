@@ -25,7 +25,19 @@ import {
   Receipt as ReceiptIcon
 } from '@mui/icons-material';
 import { Bar } from 'react-chartjs-2';
-import { Chart as ChartJS, CategoryScale, LinearScale, BarElement, Title, Tooltip, Legend } from 'chart.js';
+import { 
+  Chart as ChartJS, 
+  CategoryScale, 
+  LinearScale, 
+  BarElement, 
+  Title, 
+  Tooltip, 
+  Legend,
+  ArcElement,
+  PointElement,
+  LineElement,
+  RadialLinearScale
+} from 'chart.js';
 import AuthContext from '../context/AuthContext';
 import { getUserTransactions } from '../services/transactionService';
 import { getUserBudgets } from '../services/budgetService';
@@ -33,7 +45,18 @@ import { getUserGoals } from '../services/goalService';
 import { getSpendingAnalysis } from '../services/transactionService';
 
 // Register ChartJS components
-ChartJS.register(CategoryScale, LinearScale, BarElement, Title, Tooltip, Legend);
+ChartJS.register(
+  CategoryScale, 
+  LinearScale, 
+  BarElement, 
+  Title, 
+  Tooltip, 
+  Legend,
+  ArcElement,
+  PointElement,
+  LineElement,
+  RadialLinearScale
+);
 
 const Dashboard = () => {
   const navigate = useNavigate();
@@ -56,10 +79,22 @@ const Dashboard = () => {
       try {
         // Fetch user's transactions, budgets, goals, and spending analysis
         const [transactionsData, budgetsData, goalsData, analysisData] = await Promise.all([
-          getUserTransactions(currentUser.id),
-          getUserBudgets(currentUser.id),
-          getUserGoals(currentUser.id),
-          getSpendingAnalysis(currentUser.id)
+          getUserTransactions(currentUser.id).catch(err => {
+            console.error('Error fetching transactions:', err);
+            return [];
+          }),
+          getUserBudgets(currentUser.id).catch(err => {
+            console.error('Error fetching budgets:', err);
+            return [];
+          }),
+          getUserGoals(currentUser.id).catch(err => {
+            console.error('Error fetching goals:', err);
+            return [];
+          }),
+          getSpendingAnalysis(currentUser.id).catch(err => {
+            console.error('Error fetching spending analysis:', err);
+            return null;
+          })
         ]);
         
         console.log('Transaction Data:', transactionsData);
@@ -253,7 +288,7 @@ const Dashboard = () => {
                 variant="contained" 
                 color="secondary" 
                 sx={{ mt: 2 }}
-                onClick={() => navigate('/analysis')}
+                onClick={() => navigate('/dashboard/analysis')}
               >
                 View Analysis
               </Button>
@@ -291,7 +326,7 @@ const Dashboard = () => {
                 variant="contained" 
                 color="primary" 
                 sx={{ mt: 2 }}
-                onClick={() => navigate('/budget')}
+                onClick={() => navigate('/dashboard/budget')}
               >
                 Manage Budgets
               </Button>
@@ -329,7 +364,7 @@ const Dashboard = () => {
                 variant="contained" 
                 color="primary" 
                 sx={{ mt: 2 }}
-                onClick={() => navigate('/goals')}
+                onClick={() => navigate('/dashboard/goals')}
               >
                 View Goals
               </Button>
@@ -367,7 +402,7 @@ const Dashboard = () => {
                     variant="contained" 
                     color="primary"
                     startIcon={<AddIcon />}
-                    onClick={() => navigate('/transactions')}
+                    onClick={() => navigate('/dashboard/transactions')}
                     sx={{ mt: 2 }}
                   >
                     {transactions.length > 0 ? 'Manage Transactions' : 'Add Transactions'}
@@ -388,7 +423,7 @@ const Dashboard = () => {
               <Button 
                 startIcon={<AddIcon />}
                 size="small"
-                onClick={() => navigate('/transactions')}
+                onClick={() => navigate('/dashboard/transactions')}
               >
                 Add
               </Button>
@@ -431,7 +466,7 @@ const Dashboard = () => {
                     variant="contained" 
                     startIcon={<AddIcon />}
                     sx={{ mt: 2 }}
-                    onClick={() => navigate('/transactions')}
+                    onClick={() => navigate('/dashboard/transactions')}
                   >
                     Add Transaction
                   </Button>
@@ -443,7 +478,7 @@ const Dashboard = () => {
               <Box sx={{ mt: 2, textAlign: 'center' }}>
                 <Button 
                   variant="outlined" 
-                  onClick={() => navigate('/transactions')}
+                  onClick={() => navigate('/dashboard/transactions')}
                 >
                   View All Transactions
                 </Button>

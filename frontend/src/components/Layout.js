@@ -1,104 +1,126 @@
+// Import React and necessary hooks
 import React, { useState, useContext } from 'react';
+// Import routing components from react-router-dom
 import { Outlet, useNavigate, useLocation } from 'react-router-dom';
+// Import Material-UI components for layout and UI elements
 import {
-  AppBar,
-  Box,
-  CssBaseline,
-  Divider,
-  Drawer,
-  IconButton,
-  List,
-  ListItem,
-  ListItemButton,
-  ListItemIcon,
-  ListItemText,
-  Toolbar,
-  Typography,
-  Menu,
-  MenuItem,
-  Avatar,
-  useMediaQuery,
-  useTheme
+  AppBar, // Top navigation bar
+  Box, // Flexible container component
+  CssBaseline, // Normalize CSS across browsers
+  Divider, // Visual separator
+  Drawer, // Side navigation panel
+  IconButton, // Button with an icon
+  List, // Container for list items
+  ListItem, // Individual list item
+  ListItemButton, // Makes list item clickable
+  ListItemIcon, // Container for icon in list item
+  ListItemText, // Text content of list item
+  Toolbar, // Container for app bar content
+  Typography, // Text component with controlled typography
+  Menu, // Dropdown menu component
+  MenuItem, // Individual item in menu
+  Avatar, // User profile picture/icon
+  useMediaQuery, // Hook to check screen size for responsiveness
+  useTheme // Hook to access theme object
 } from '@mui/material';
+// Import Material-UI icons for navigation and actions
 import {
-  Menu as MenuIcon,
-  Dashboard as DashboardIcon,
-  Receipt as ReceiptIcon,
-  AccountBalance as AccountBalanceIcon,
-  EmojiEvents as EmojiEventsIcon,
-  ShowChart as ShowChartIcon,
-  QuestionAnswer as QuestionAnswerIcon,
-  Person as PersonIcon,
-  Logout as LogoutIcon
+  Menu as MenuIcon, // Hamburger menu icon
+  Dashboard as DashboardIcon, // Icon for dashboard
+  Receipt as ReceiptIcon, // Icon for transactions
+  AccountBalance as AccountBalanceIcon, // Icon for budget
+  EmojiEvents as EmojiEventsIcon, // Icon for goals
+  ShowChart as ShowChartIcon, // Icon for analysis
+  QuestionAnswer as QuestionAnswerIcon, // Icon for AI assistant
+  Person as PersonIcon, // Icon for profile
+  Logout as LogoutIcon // Icon for logout
 } from '@mui/icons-material';
+// Import authentication context for user state management
 import AuthContext from '../context/AuthContext';
 
+// Define drawer width for consistent sizing
 const drawerWidth = 240;
 
+// Main layout component that wraps dashboard pages
 const Layout = () => {
+  // Access user data and logout function from AuthContext
   const { currentUser, logout } = useContext(AuthContext);
+  // Access theme for responsive design
   const theme = useTheme();
+  // Hook for programmatic navigation
   const navigate = useNavigate();
+  // Hook to access current location/URL
   const location = useLocation();
+  // Check if device is mobile for responsive behavior
   const isMobile = useMediaQuery(theme.breakpoints.down('md'));
   
+  // State to control drawer open/close on mobile
   const [mobileOpen, setMobileOpen] = useState(false);
+  // State to control user menu (avatar menu) position
   const [anchorEl, setAnchorEl] = useState(null);
 
+  // Toggle drawer visibility on mobile
   const handleDrawerToggle = () => {
     setMobileOpen(!mobileOpen);
   };
 
+  // Open user menu with clicked element as anchor
   const handleMenuOpen = (event) => {
     setAnchorEl(event.currentTarget);
   };
 
+  // Close user menu
   const handleMenuClose = () => {
     setAnchorEl(null);
   };
 
+  // Handle user logout action
   const handleLogout = () => {
-    handleMenuClose();
-    logout();
-    navigate('/login');
+    handleMenuClose(); // Close menu first
+    logout(); // Call logout function from AuthContext
+    navigate('/login'); // Redirect to login page
   };
 
+  // Handle navigation to different routes
   const handleNavigation = (path) => {
-    navigate(path);
+    navigate(path); // Navigate to selected path
     if (isMobile) {
-      setMobileOpen(false);
+      setMobileOpen(false); // Close drawer on mobile after navigation
     }
   };
 
-  // Navigation items with icons
+  // Navigation items configuration with text, route path, and icon
   const navItems = [
-    { text: 'Dashboard', path: '/', icon: <DashboardIcon /> },
-    { text: 'Transactions', path: '/transactions', icon: <ReceiptIcon /> },
-    { text: 'Budget', path: '/budget', icon: <AccountBalanceIcon /> },
-    { text: 'Goals', path: '/goals', icon: <EmojiEventsIcon /> },
-    { text: 'Analysis', path: '/analysis', icon: <ShowChartIcon /> },
-    { text: 'AI Assistant', path: '/assistant', icon: <QuestionAnswerIcon /> },
+    { text: 'Dashboard', path: '/dashboard', icon: <DashboardIcon /> },
+    { text: 'Transactions', path: '/dashboard/transactions', icon: <ReceiptIcon /> },
+    { text: 'Budget', path: '/dashboard/budget', icon: <AccountBalanceIcon /> },
+    { text: 'Goals', path: '/dashboard/goals', icon: <EmojiEventsIcon /> },
+    { text: 'Analysis', path: '/dashboard/analysis', icon: <ShowChartIcon /> },
+    { text: 'AI Assistant', path: '/dashboard/assistant', icon: <QuestionAnswerIcon /> },
   ];
 
+  // Drawer content definition reused in both temporary and permanent drawers
   const drawer = (
     <Box>
       <Toolbar>
+        {/* App title in drawer header */}
         <Typography variant="h6" noWrap component="div">
           CougarWise
         </Typography>
       </Toolbar>
-      <Divider />
+      <Divider /> {/* Visual separator between header and navigation */}
       <List>
+        {/* Map navigation items to list items */}
         {navItems.map((item) => (
           <ListItem key={item.text} disablePadding>
             <ListItemButton 
-              selected={location.pathname === item.path}
-              onClick={() => handleNavigation(item.path)}
+              selected={location.pathname === item.path} // Highlight current route
+              onClick={() => handleNavigation(item.path)} // Navigate on click
             >
               <ListItemIcon>
-                {item.icon}
+                {item.icon} {/* Display appropriate icon */}
               </ListItemIcon>
-              <ListItemText primary={item.text} />
+              <ListItemText primary={item.text} /> {/* Display navigation text */}
             </ListItemButton>
           </ListItem>
         ))}
@@ -106,14 +128,15 @@ const Layout = () => {
     </Box>
   );
 
+  // Return the complete layout structure
   return (
-    <Box sx={{ display: 'flex' }}>
-      <CssBaseline />
+    <Box sx={{ display: 'flex' }}> {/* Root container with flex layout */}
+      <CssBaseline /> {/* Normalize CSS */}
       <AppBar
-        position="fixed"
+        position="fixed" // Fixed position at top of viewport
         sx={{
-          width: { sm: `calc(100% - ${drawerWidth}px)` },
-          ml: { sm: `${drawerWidth}px` },
+          width: { sm: `calc(100% - ${drawerWidth}px)` }, // Adjust width for non-mobile
+          ml: { sm: `${drawerWidth}px` }, // Push to the right on non-mobile to make room for drawer
         }}
       >
         <Toolbar>
@@ -121,33 +144,38 @@ const Layout = () => {
             color="inherit"
             aria-label="open drawer"
             edge="start"
-            onClick={handleDrawerToggle}
-            sx={{ mr: 2, display: { sm: 'none' } }}
+            onClick={handleDrawerToggle} // Toggle drawer on click
+            sx={{ mr: 2, display: { sm: 'none' } }} // Only show on mobile
           >
-            <MenuIcon />
+            <MenuIcon /> {/* Hamburger menu icon */}
           </IconButton>
           <Typography
             variant="h6"
             component="div"
-            sx={{ flexGrow: 1 }}
+            sx={{ flexGrow: 1 }} // Take available space to push avatar to right
           >
-            {navItems.find(item => item.path === location.pathname)?.text || 'CougarWise'}
+            {/* Dynamic title based on current route */}
+            {navItems.find(item => 
+              location.pathname === item.path || 
+              (location.pathname === '/dashboard' && item.path === '/dashboard')
+            )?.text || 'CougarWise'}
           </Typography>
           
           <IconButton
-            onClick={handleMenuOpen}
+            onClick={handleMenuOpen} // Open user menu on click
             size="large"
             edge="end"
             color="inherit"
           >
             <Avatar sx={{ width: 32, height: 32, bgcolor: 'secondary.main' }}>
+              {/* Display first letter of username or fallback to 'U' */}
               {currentUser?.username?.charAt(0)?.toUpperCase() || 'U'}
             </Avatar>
           </IconButton>
           <Menu
-            anchorEl={anchorEl}
-            open={Boolean(anchorEl)}
-            onClose={handleMenuClose}
+            anchorEl={anchorEl} // Position relative to avatar button
+            open={Boolean(anchorEl)} // Show when anchorEl is set
+            onClose={handleMenuClose} // Close on outside click
             anchorOrigin={{
               vertical: 'bottom',
               horizontal: 'right',
@@ -158,15 +186,15 @@ const Layout = () => {
             }}
           >
             <MenuItem onClick={() => {
-              handleMenuClose();
-              navigate('/profile');
+              handleMenuClose(); // Close menu
+              navigate('/dashboard/profile'); // Navigate to profile page
             }}>
               <ListItemIcon>
                 <PersonIcon fontSize="small" />
               </ListItemIcon>
               Profile
             </MenuItem>
-            <MenuItem onClick={handleLogout}>
+            <MenuItem onClick={handleLogout}> {/* Logout action */}
               <ListItemIcon>
                 <LogoutIcon fontSize="small" />
               </ListItemIcon>
@@ -177,48 +205,48 @@ const Layout = () => {
       </AppBar>
       <Box
         component="nav"
-        sx={{ width: { sm: drawerWidth }, flexShrink: { sm: 0 } }}
+        sx={{ width: { sm: drawerWidth }, flexShrink: { sm: 0 } }} // Fixed width on non-mobile
       >
         <Drawer
-          variant="temporary"
-          open={mobileOpen}
-          onClose={handleDrawerToggle}
+          variant="temporary" // Temporary drawer for mobile
+          open={mobileOpen} // Controlled by mobileOpen state
+          onClose={handleDrawerToggle} // Close on outside click
           ModalProps={{
-            keepMounted: true, // Better mobile performance
+            keepMounted: true, // Better mobile performance by keeping in DOM
           }}
           sx={{
-            display: { xs: 'block', sm: 'none' },
-            '& .MuiDrawer-paper': { boxSizing: 'border-box', width: drawerWidth },
+            display: { xs: 'block', sm: 'none' }, // Only visible on mobile
+            '& .MuiDrawer-paper': { boxSizing: 'border-box', width: drawerWidth }, // Set drawer width
           }}
         >
-          {drawer}
+          {drawer} {/* Render drawer content */}
         </Drawer>
         <Drawer
-          variant="permanent"
+          variant="permanent" // Always visible on non-mobile
           sx={{
-            display: { xs: 'none', sm: 'block' },
-            '& .MuiDrawer-paper': { boxSizing: 'border-box', width: drawerWidth },
+            display: { xs: 'none', sm: 'block' }, // Only visible on non-mobile
+            '& .MuiDrawer-paper': { boxSizing: 'border-box', width: drawerWidth }, // Set drawer width
           }}
           open
         >
-          {drawer}
+          {drawer} {/* Render drawer content */}
         </Drawer>
       </Box>
       <Box
-        component="main"
+        component="main" // Main content area
         sx={{ 
-          flexGrow: 1, 
-          p: 3, 
-          width: { sm: `calc(100% - ${drawerWidth}px)` },
-          minHeight: '100vh',
-          backgroundColor: 'background.default'
+          flexGrow: 1, // Take available space
+          p: 3, // Padding
+          width: { sm: `calc(100% - ${drawerWidth}px)` }, // Adjust width for non-mobile
+          minHeight: '100vh', // Full viewport height
+          backgroundColor: 'background.default' // Use theme background color
         }}
       >
-        <Toolbar />
-        <Outlet />
+        <Toolbar /> {/* Empty toolbar to push content below AppBar */}
+        <Outlet /> {/* Render child routes here */}
       </Box>
     </Box>
   );
 };
 
-export default Layout; 
+export default Layout; // Export component for use in app
