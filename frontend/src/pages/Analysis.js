@@ -71,6 +71,8 @@ const Analysis = () => {
   const [goalProgressData, setGoalProgressData] = useState(null);
 
   const fetchData = useCallback(async () => {
+    
+
     setLoading(true);
     try {
       // Get user from localStorage
@@ -104,8 +106,13 @@ const Analysis = () => {
         })
       ]);
       
+
+
+      
       // Ensure we always set the state, even with empty arrays
       setTransactions(transactionsData || []);
+      console.log("Fetched transactions:", transactionsData); // log the transactions for bugtesting
+
       setBudgets(budgetsData || []);
       setGoals(goalsData || []);
     } catch (error) {
@@ -185,18 +192,22 @@ const Analysis = () => {
     
     // Prepare data for all charts
     // Category expense data
+    // Inititally had an error where income was included in the pie charts, now income is excluded
     const expensesByCategory = filteredTransactions
-      .filter(t => {
-        // Based on the sample data, transactions with categories and positive amounts are expenses
-        return t.category && (t.amount > 0 || t.type === 'expense' || t.amount < 0);
-      })
-      .reduce((acc, transaction) => {
-        const category = transaction.category || 'Uncategorized';
-        if (!acc[category]) acc[category] = 0;
-        // Use absolute value for expenses since they might be stored as negative numbers
-        acc[category] += Math.abs(transaction.amount);
-        return acc;
-      }, {});
+    .filter(t => {
+      // Exclude 'income' category explicitly and only include actual expenses
+      return (
+        typeof t.category === 'string' &&
+        t.category.trim().toLowerCase() !== 'income' &&
+        (t.amount > 0 || t.amount < 0 || t.type === 'expense')
+      );
+    })
+    .reduce((acc, transaction) => {
+      const category = transaction.category?.trim().toLowerCase() || 'uncategorized';
+      if (!acc[category]) acc[category] = 0;
+      acc[category] += Math.abs(transaction.amount); // Use absolute value for clarity
+      return acc;
+    }, {});
     
     // If no expense data, set default empty chart
     if (Object.keys(expensesByCategory).length === 0) {
@@ -251,27 +262,22 @@ const Analysis = () => {
       });
 
       if (monthIndex !== -1) {
-        // Determine if a transaction is income or expense based on amount or type property
-        if (transaction.amount > 0 || transaction.type === 'income') {
-          monthlyData.income[monthIndex] += Math.abs(transaction.amount);
+        const isIncome = transaction.category?.trim().toLowerCase() === 'income';
+      
+        if (isIncome) {
+          monthlyData.savings[monthIndex] += Math.abs(transaction.amount);
         } else {
           monthlyData.expenses[monthIndex] += Math.abs(transaction.amount);
         }
-        
-        monthlyData.savings[monthIndex] = monthlyData.income[monthIndex] - monthlyData.expenses[monthIndex];
+      
+
+
       }
     });
 
     setMonthlyTotalsData({
       labels: months,
       datasets: [
-        {
-          label: 'Income',
-          data: monthlyData.income,
-          backgroundColor: 'rgba(0, 100, 0, 0.5)',
-          borderColor: 'rgba(0, 100, 0, 1)',
-          borderWidth: 1,
-        },
         {
           label: 'Expenses',
           data: monthlyData.expenses,
@@ -289,25 +295,36 @@ const Analysis = () => {
       ],
     });
 
-    // Budget comparison data
-    const categorySpendings = transactions
-      .filter(t => t.type === 'expense')
+    const filteredForSpending = filterTransactionsByTimeframe(transactions);
+
+    const categorySpendings = filteredForSpending
+      .filter(t => {
+        return (
+          typeof t.category === 'string' &&
+          t.category.trim().toLowerCase() !== 'income' &&
+          t.amount !== 0
+        );
+      })
       .reduce((acc, transaction) => {
-        const category = transaction.category || 'Uncategorized';
+        const category = transaction.category.trim().toLowerCase();
         if (!acc[category]) acc[category] = 0;
-        acc[category] += transaction.amount;
+        acc[category] += Math.abs(transaction.amount);
         return acc;
       }, {});
-
-    const budgetCategories = [];
-    const budgetAmounts = [];
-    const actualAmounts = [];
-
-    budgets.forEach(budget => {
-      budgetCategories.push(budget.category);
-      budgetAmounts.push(budget.amount);
-      actualAmounts.push(categorySpendings[budget.category] || 0);
-    });
+  
+  const budgetCategories = [];
+  const budgetAmounts = [];
+  const actualAmounts = [];
+  
+  // Displays budget vs actual spending [FIXED]
+  // initially had error which only budget would show but now both budget and spending show
+  budgets.forEach(budget => {
+    const categoryLabel = budget.category.toLowerCase();
+    budgetCategories.push(categoryLabel);
+    budgetAmounts.push(budget.amount);
+    const spending = categorySpendings[categoryLabel] || 0;
+    actualAmounts.push(spending);
+  });
 
     setBudgetComparisonData({
       labels: budgetCategories,

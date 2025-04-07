@@ -212,13 +212,13 @@ const AIAssistant = () => {
       
       // Group expenses by category to find spending patterns
       const categorySpendings = transactions
-        .filter(t => t.type === 'expense')
-        .reduce((acc, t) => {
-          const category = t.category || 'Uncategorized';
-          if (!acc[category]) acc[category] = 0;
-          acc[category] += t.amount;
-          return acc;
-        }, {});
+      .filter(t => t.category && t.amount !== 0)
+      .reduce((acc, transaction) => {
+      const category = transaction.category || 'Uncategorized';
+      if (!acc[category]) acc[category] = 0;
+        acc[category] += Math.abs(transaction.amount);
+        return acc;
+      }, {});
       
       // Sort categories by spending amount (highest first)
       const sortedCategories = Object.entries(categorySpendings)

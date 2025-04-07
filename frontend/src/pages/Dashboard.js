@@ -168,6 +168,9 @@ const Dashboard = () => {
   }, [currentUser]);
 
   // Chart data preparation
+
+
+  // INCOME NEEDS TO BE FILTERED OUT FROM THE SPENDING CHARTS
   const chartData = {
     labels: analysis?.category_breakdown ? Object.keys(analysis.category_breakdown) : [],
     datasets: [
