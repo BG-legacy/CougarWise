@@ -1,0 +1,15 @@
+apiVersion: v1  # Kubernetes API version for Service resources
+kind: Service  # Resource type - a Service exposes a set of pods as a network service
+metadata:  # Metadata about this service
+  name: cougarwise-backend-service  # Name of the service
+  labels:  # Labels for identification
+    app: cougarwise-backend  # Label that identifies this as part of the cougarwise-backend app
+spec:  # Specification for the service
+  selector:  # How the service knows which pods to route traffic to
+    app: cougarwise-backend  # Select pods with this label
+  ports:  # List of ports to expose
+  - port: 8000  # Port on the service
+    targetPort: 8000  # Port on the pod to forward to
+    protocol: TCP  # Protocol used (TCP/UDP)
+    name: http  # Name for this port (useful for referencing)
+  type: ClusterIP  # Service type - ClusterIP means it's only accessible within the cluster 

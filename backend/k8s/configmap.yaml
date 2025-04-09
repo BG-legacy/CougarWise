@@ -1,0 +1,15 @@
+apiVersion: v1  # Kubernetes API version for ConfigMap resources
+kind: ConfigMap  # Resource type - a ConfigMap holds configuration data as key-value pairs
+metadata:  # Metadata about this ConfigMap
+  name: cougarwise-config  # Name of the ConfigMap, referenced by other resources
+data:  # Key-value data stored in the ConfigMap
+  .env: |  # Key named ".env" with multi-line string value (using YAML pipe syntax)
+    API_PORT=8000  # Port the API server will listen on
+    MONGODB_URI=mongodb://mongodb:27017  # URI for connecting to MongoDB (using service name)
+    MONGODB_DB_NAME=cougarwise  # Name of the MongoDB database to use
+    OPENAI_API_KEY=your-api-key-here  # API key for OpenAI services (replace in production)
+    STUDENT_DATA_PATH=AI/student_spending.csv  # Path to student data for AI model
+    AI_MODEL_PATH=AI/trained_models  # Path where trained AI models are stored
+    DEBUG=False  # Flag to control debug mode
+    SECRET_KEY=your-secret-key-here  # Secret key for security (replace in production)
+    ALLOWED_ORIGINS=*  # CORS allowed origins (* means all origins) 

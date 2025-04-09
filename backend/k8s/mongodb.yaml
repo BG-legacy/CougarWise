@@ -1,0 +1,60 @@
+apiVersion: apps/v1  # Kubernetes API version for Deployment resources
+kind: Deployment  # Resource type - a Deployment manages a replicated application
+metadata:  # Metadata about this deployment
+  name: mongodb  # Name of the deployment
+  labels:  # Labels for identifying this deployment
+    app: mongodb  # Label that identifies this as the MongoDB app
+spec:  # Specification for the desired state of the deployment
+  replicas: 1  # Only one MongoDB instance (not replicated for simplicity)
+  selector:  # How the deployment finds which pods to manage
+    matchLabels:  # Select pods with matching labels
+      app: mongodb  # Match pods with this label
+  template:  # Template for creating pods
+    metadata:  # Metadata for the pods
+      labels:  # Labels to apply to every pod
+        app: mongodb  # Label that matches the selector above
+    spec:  # Specification for the pods
+      containers:  # List of containers in the pod
+      - name: mongodb  # Name of the container
+        image: mongo:6.0  # MongoDB container image version 6.0
+        ports:  # List of ports to expose
+        - containerPort: 27017  # The port MongoDB listens on
+        volumeMounts:  # Mounting volumes into the container
+        - name: mongodb-data  # Name of the volume to mount
+          mountPath: /data/db  # Path in container where MongoDB stores data
+        resources:  # Resource limits and requests for the container
+          limits:  # Maximum resources the container can use
+            cpu: "1"  # 1 CPU core maximum
+            memory: "1Gi"  # 1 gigabyte memory maximum
+          requests:  # Resources guaranteed to the container
+            cpu: "0.5"  # Request 0.5 CPU cores
+            memory: "512Mi"  # Request 512 megabytes memory
+      volumes:  # Volumes available to the pod
+      - name: mongodb-data  # Name of the volume
+        persistentVolumeClaim:  # Volume type is a PVC
+          claimName: mongodb-pvc  # Name of the PVC to use
+---  # Document separator - multiple resources in one YAML file
+apiVersion: v1  # Kubernetes API version for Service resources
+kind: Service  # Resource type - a Service exposes a set of pods as a network service
+metadata:  # Metadata about this service
+  name: mongodb  # Name of the service
+  labels:  # Labels for identification
+    app: mongodb  # Label that identifies this as part of the MongoDB app
+spec:  # Specification for the service
+  selector:  # How the service knows which pods to route traffic to
+    app: mongodb  # Select pods with this label
+  ports:  # List of ports to expose
+  - port: 27017  # Port on the service
+    targetPort: 27017  # Port on the pod to forward to
+  type: ClusterIP  # Service type - ClusterIP means it's only accessible within the cluster
+---  # Document separator - another resource
+apiVersion: v1  # Kubernetes API version for PersistentVolumeClaim resources
+kind: PersistentVolumeClaim  # Resource type - a PVC requests storage resources
+metadata:  # Metadata about this PVC
+  name: mongodb-pvc  # Name of the PVC, referenced by other resources
+spec:  # Specification for the PVC
+  accessModes:  # How the volume can be mounted
+    - ReadWriteOnce  # Can be mounted as read-write by a single node
+  resources:  # Resource requirements for the PVC
+    requests:  # Resources being requested
+      storage: 5Gi  # Request 5 gigabytes of storage 

@@ -1,0 +1,23 @@
+apiVersion: networking.k8s.io/v1  # Kubernetes API version for Ingress resources
+kind: Ingress  # Resource type - an Ingress manages external access to services
+metadata:  # Metadata about this Ingress
+  name: cougarwise-ingress  # Name of the Ingress resource
+  annotations:  # Additional configuration via annotations
+    kubernetes.io/ingress.class: nginx  # Using NGINX Ingress Controller
+    nginx.ingress.kubernetes.io/rewrite-target: /  # Rewrite the URL path to root
+    nginx.ingress.kubernetes.io/ssl-redirect: "false"  # Disable automatic SSL redirect
+    # Load balancing annotations
+    nginx.ingress.kubernetes.io/load-balance: "round_robin"  # Load balancing algorithm
+    nginx.ingress.kubernetes.io/upstream-max-fails: "3"  # Max number of failed attempts before marking a backend as unavailable
+    nginx.ingress.kubernetes.io/upstream-fail-timeout: "30"  # Time in seconds to consider a backend unavailable
+spec:  # Specification for the Ingress
+  rules:  # Rules for routing traffic
+  - http:  # HTTP routing rules
+      paths:  # List of path rules
+      - path: /api  # Handle requests with path starting with /api
+        pathType: Prefix  # Match type - Prefix means match any URL starting with this path
+        backend:  # Where to route matching requests
+          service:  # Service to route to
+            name: cougarwise-backend-service  # Name of the service
+            port:  # Port on the service
+              number: 8000  # Port number 

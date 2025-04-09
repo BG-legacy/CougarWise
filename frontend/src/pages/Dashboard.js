@@ -66,6 +66,7 @@ const Dashboard = () => {
   const [transactions, setTransactions] = useState([]);
   const [budgets, setBudgets] = useState([]);
   const [goals, setGoals] = useState([]);
+  const [analysisData, setAnalysisData] = useState(null);
   const [analysis, setAnalysis] = useState(null);
   const [error, setError] = useState(null);
 
@@ -100,6 +101,9 @@ const Dashboard = () => {
         console.log('Transaction Data:', transactionsData);
         console.log('Analysis Data:', analysisData);
         
+        // Store the analysis data for later use in filtering income categories
+        setAnalysisData(analysisData);
+        
         // Check if we have transactions but no spending data
         const hasTransactions = transactionsData && transactionsData.length > 0;
         const hasSpendingData = analysisData?.category_breakdown && 
@@ -112,14 +116,23 @@ const Dashboard = () => {
         setBudgets(budgetsData);
         setGoals(goalsData || []);
         
-        // First check: Do we have transactions where amount > 0?
+        // First check: Do we have transactions where amount > 0? (income)
         const positiveTransactions = transactionsData.filter(t => t.amount > 0);
         
         // Second check: Are our transactions properly categorized?
         const categorizedTransactions = transactionsData.filter(t => t.category && t.category.trim() !== '');
         
+        // Identify expense transactions (negative amounts) for total spending calculation
+        const expenseTransactions = transactionsData.filter(t => t.amount < 0);
+        
+        // Calculate total spending from expense transactions only
+        const calculatedTotalSpending = expenseTransactions.reduce((total, transaction) => 
+          total + Math.abs(transaction.amount), 0);
+        
         console.log('Positive Transactions:', positiveTransactions.length);
         console.log('Categorized Transactions:', categorizedTransactions.length);
+        console.log('Expense Transactions:', expenseTransactions.length);
+        console.log('Calculated Total Spending:', calculatedTotalSpending);
         
         // Create manual category breakdown if the API doesn't provide it but we have transactions
         let categoryBreakdown = {};
@@ -128,10 +141,13 @@ const Dashboard = () => {
         if (hasTransactions && !hasSpendingData) {
           // Group transactions by category and sum their amounts
           transactionsData.forEach(transaction => {
+            // Skip income transactions (positive amounts) to only show expenses
+            if (transaction.amount >= 0) return;
+            
             const amount = Math.abs(transaction.amount);
             const category = transaction.category || 'Uncategorized';
             
-            // Include all transactions with categories as expenses
+            // Include only expense transactions (negative amounts) with categories
             if (category && category.trim() !== '') {
               if (categoryBreakdown[category]) {
                 categoryBreakdown[category] += amount;
@@ -146,7 +162,8 @@ const Dashboard = () => {
         
         // Ensure analysis data has expected structure with defaults
         setAnalysis({
-          total_spending: analysisData?.total_spending || 0,
+          // Use our calculated total spending from expense transactions only
+          total_spending: calculatedTotalSpending || analysisData?.total_spending || 0,
           period: analysisData?.period || 'Monthly',
           category_breakdown: 
             // Use API data if available, otherwise use our manual calculation, or fallback to empty
@@ -156,6 +173,7 @@ const Dashboard = () => {
                   ? categoryBreakdown 
                   : (transactionsData.length > 0 ? { 'No Categories': 0 } : {}))
         });
+
       } catch (error) {
         console.error('Error fetching dashboard data:', error);
         setError('Failed to load dashboard data. Please try again later.');
@@ -167,15 +185,42 @@ const Dashboard = () => {
     fetchDashboardData();
   }, [currentUser]);
 
+  // Filter out income categories from the category breakdown
+  useEffect(() => {
+    if (!analysis) return;
+    
+    // Check if we need to filter income categories
+    const filteredBreakdown = {...analysis.category_breakdown};
+    
+    // List of common income categories to filter out
+    const incomeCategories = ['Income', 'Salary', 'Wages', 'Dividend', 'Interest', 'Gift', 'Refund'];
+    
+    let hasChanges = false;
+    // Remove any income categories from the breakdown
+    incomeCategories.forEach(category => {
+      if (filteredBreakdown[category]) {
+        delete filteredBreakdown[category];
+        hasChanges = true;
+      }
+    });
+    
+    // Only update if we actually removed any categories to avoid unnecessary re-renders
+    if (hasChanges) {
+      setAnalysis(prev => ({
+        ...prev,
+        category_breakdown: filteredBreakdown
+      }));
+    }
+  }, [analysis?.category_breakdown]);
+
   // Chart data preparation
-
-
-  // INCOME NEEDS TO BE FILTERED OUT FROM THE SPENDING CHARTS
+  // Chart now shows expenses only, with income filtered out
   const chartData = {
     labels: analysis?.category_breakdown ? Object.keys(analysis.category_breakdown) : [],
     datasets: [
       {
-        label: 'Spending by Category',
+        // Updated label to clarify we're showing expenses
+        label: 'Expenses by Category',
         data: analysis?.category_breakdown ? Object.values(analysis.category_breakdown) : [],
         backgroundColor: [
           'rgba(255, 99, 132, 0.6)',
@@ -222,9 +267,10 @@ const Dashboard = () => {
       legend: {
         display: false,
       },
+      // Updated title to clarify we're showing expense categories
       title: {
         display: true,
-        text: 'Spending by Category'
+        text: 'Expense Categories'
       },
     },
   };
@@ -277,8 +323,9 @@ const Dashboard = () => {
                 <Avatar sx={{ bgcolor: 'primary.dark', mr: 2 }}>
                   <AttachMoneyIcon />
                 </Avatar>
+                {/* Updated title to clarify we're showing total expenses */}
                 <Typography variant="h6">
-                  Total Spending
+                  Total Expenses
                 </Typography>
               </Box>
               <Typography variant="h4" component="div" sx={{ fontWeight: 'bold', mb: 2 }}>
@@ -378,8 +425,9 @@ const Dashboard = () => {
         {/* Spending Chart */}
         <Grid item xs={12} md={8}>
           <Paper sx={{ p: 2, height: 400 }}>
+            {/* Updated title to clarify we're showing expense breakdown */}
             <Typography variant="h6" gutterBottom>
-              Spending Breakdown
+              Expense Breakdown
             </Typography>
             <Box sx={{ height: 330 }}>
               {analysis?.category_breakdown && 
@@ -388,8 +436,9 @@ const Dashboard = () => {
                 <Bar data={chartData} options={chartOptions} />
               ) : (
                 <Box sx={{ display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center', height: '100%' }}>
+                  {/* Updated message to clarify we're showing expense data */}
                   <Typography color="text.secondary" gutterBottom>
-                    No spending data available
+                    No expense data available
                   </Typography>
                   {transactions.length > 0 ? (
                     <Typography variant="body2" color="text.secondary" sx={{ mb: 2, textAlign: 'center', maxWidth: '80%' }}>

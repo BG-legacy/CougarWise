@@ -1,0 +1,16 @@
+apiVersion: kustomize.config.k8s.io/v1beta1  # Kustomize API version
+kind: Kustomization  # Resource type - Kustomization provides a way to manage multiple Kubernetes resources
+
+resources:  # List of resources to include in this kustomization
+  - deployment.yaml  # The application deployment configuration
+  - service.yaml  # Service to expose the application
+  - ingress.yaml  # Ingress for external access
+  - configmap.yaml  # ConfigMap for application configuration
+  - mongodb.yaml  # MongoDB database configuration
+  - hpa.yaml  # Horizontal Pod Autoscaler for scaling
+  - health-check.yaml  # Health check ingress configuration
+
+commonLabels:  # Labels to apply to all resources
+  app.kubernetes.io/name: cougarwise  # Name of the application
+  app.kubernetes.io/part-of: cougarwise  # Grouping label
+  app.kubernetes.io/component: backend  # Component type 

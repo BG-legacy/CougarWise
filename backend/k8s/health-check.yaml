@@ -1,0 +1,19 @@
+apiVersion: networking.k8s.io/v1  # Kubernetes API version for Ingress resources
+kind: Ingress  # Resource type - an Ingress manages external access to services
+metadata:  # Metadata about this Ingress
+  name: health-check-ingress  # Name of the Ingress resource for health checks
+  annotations:  # Additional configuration via annotations
+    kubernetes.io/ingress.class: nginx  # Using NGINX Ingress Controller
+    # nginx.ingress.kubernetes.io/rewrite-target: /api/health  # Original commented rule
+    nginx.ingress.kubernetes.io/rewrite-target: /  # Rewrite the URL path to root
+spec:  # Specification for the Ingress
+  rules:  # Rules for routing traffic
+  - http:  # HTTP routing rules
+      paths:  # List of path rules
+      - path: /health  # Handle requests with path exactly matching /health
+        pathType: Exact  # Match type - Exact means match only this exact path
+        backend:  # Where to route matching requests
+          service:  # Service to route to
+            name: cougarwise-backend-service  # Name of the service
+            port:  # Port on the service
+              number: 8000  # Port number 

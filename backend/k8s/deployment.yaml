@@ -1,0 +1,57 @@
+apiVersion: apps/v1  # Kubernetes API version for Deployment resources
+kind: Deployment  # Resource type - a Deployment manages a replicated application
+metadata:  # Metadata about this deployment
+  name: cougarwise-backend  # Name of the deployment
+  labels:  # Labels for identifying this deployment
+    app: cougarwise-backend  # Label that identifies this as part of the cougarwise-backend app
+spec:  # Specification for the desired state of the deployment
+  replicas: 3  # Number of identical pods to maintain at all times
+  selector:  # How the deployment finds which pods to manage
+    matchLabels:  # Select pods with matching labels
+      app: cougarwise-backend  # Match pods with this label
+  template:  # Template for creating pods
+    metadata:  # Metadata for the pods
+      labels:  # Labels to apply to every pod
+        app: cougarwise-backend  # Label that matches the selector above
+    spec:  # Specification for the pods
+      containers:  # List of containers in the pod
+      - name: cougarwise-backend  # Name of the container
+        image: cougarwise-backend:latest  # Container image to use
+        imagePullPolicy: IfNotPresent  # Only pull if not present locally
+        ports:  # List of ports to expose
+        - containerPort: 8000  # The port the app listens on inside the container
+        env:  # Environment variables for the container
+        - name: API_PORT  # Environment variable name
+          value: "8000"  # Environment variable value
+        - name: MONGODB_URI  # MongoDB connection string
+          value: "mongodb://mongodb:27017"  # Connects to the mongodb service at port 27017
+        - name: MONGODB_DB_NAME  # MongoDB database name
+          value: "cougarwise"  # Name of the database to use
+        volumeMounts:  # Mounting volumes into the container
+        - name: config-volume  # Name of the volume to mount
+          mountPath: /app/.env  # Path in container where volume is mounted
+          subPath: .env  # Specific file in the volume to mount
+        resources:  # Resource limits and requests for the container
+          limits:  # Maximum resources the container can use
+            cpu: "1"  # 1 CPU core maximum
+            memory: "512Mi"  # 512 megabytes memory maximum
+          requests:  # Resources guaranteed to the container
+            cpu: "0.5"  # Request 0.5 CPU cores
+            memory: "256Mi"  # Request 256 megabytes memory
+        # Comment out these probes for initial testing
+        # livenessProbe:  # Checks if the container is alive and running
+        #   httpGet:  # HTTP GET request to check health
+        #     path: /api/health  # API endpoint to check
+        #     port: 8000  # Port to send request to
+        #   initialDelaySeconds: 60  # Wait 60 seconds before first probe
+        #   periodSeconds: 10  # Check every 10 seconds
+        # readinessProbe:  # Checks if the container is ready to receive traffic
+        #   httpGet:  # HTTP GET request to check readiness
+        #     path: /api/health  # API endpoint to check
+        #     port: 8000  # Port to send request to
+        #   initialDelaySeconds: 30  # Wait 30 seconds before first probe
+        #   periodSeconds: 5  # Check every 5 seconds
+      volumes:  # Volumes available to the pod
+      - name: config-volume  # Name of the volume
+        configMap:  # Volume type is a ConfigMap
+          name: cougarwise-config  # Name of the ConfigMap to use 

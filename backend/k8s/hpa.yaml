@@ -1,0 +1,24 @@
+apiVersion: autoscaling/v2  # Kubernetes API version for HorizontalPodAutoscaler resources
+kind: HorizontalPodAutoscaler  # Resource type - an HPA automatically scales pods
+metadata:  # Metadata about this HPA
+  name: cougarwise-backend-hpa  # Name of the HPA resource
+spec:  # Specification for the HPA
+  scaleTargetRef:  # Reference to the target to scale
+    apiVersion: apps/v1  # API version of the target resource
+    kind: Deployment  # Kind of the target resource - a Deployment
+    name: cougarwise-backend  # Name of the target deployment
+  minReplicas: 3  # Minimum number of replicas to maintain
+  maxReplicas: 10  # Maximum number of replicas to scale up to
+  metrics:  # Metrics to use for scaling decisions
+  - type: Resource  # Type of metric - Resource means CPU or memory
+    resource:  # Resource metric specification
+      name: cpu  # Metric name - CPU utilization
+      target:  # Target value for the metric
+        type: Utilization  # Type of target - percentage of resource utilization
+        averageUtilization: 70  # Target CPU utilization percentage (70%)
+  - type: Resource  # Another resource metric
+    resource:  # Resource metric specification
+      name: memory  # Metric name - memory utilization
+      target:  # Target value for the metric
+        type: Utilization  # Type of target - percentage of resource utilization
+        averageUtilization: 80  # Target memory utilization percentage (80%) 
