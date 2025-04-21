@@ -47,5 +47,4 @@ Thumbs.db
 
 # AI model files (if large)
 *.h5
-*.pkl
 *.model 
