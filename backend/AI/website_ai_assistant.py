@@ -20,7 +20,7 @@ class WebsiteAIAssistant:
     def __init__(self):
         """
         Initialize the AI assistant with necessary API keys and models.
-        Sets up the OpenAI API connection and trains the spending analysis model.
+        Sets up the OpenAI API connection and loads the spending analysis model.
         """
         # Load environment variables
         load_dotenv()
@@ -40,17 +40,12 @@ class WebsiteAIAssistant:
             print("WebsiteAIAssistant: WARNING - OpenAI API key not found. AI features will be limited.")
             self.client = None
             
-        # Create instance of spending analysis model for predicting student spending patterns
+        # Create instance of spending analysis model
         self.spending_analyzer = StudentSpendingAnalysis()
         
-        # Try to train the spending model, with error handling
-        try:
-            # Train the model when the assistant is initialized
-            self.spending_analyzer.train_model()
-        except Exception as e:
-            # If training fails, log the error and set analyzer to None
-            print(f"Warning: Could not train spending model: {e}")
-            self.spending_analyzer = None  # This will trigger mock responses in other methods
+        # The model will be loaded from disk if it exists, or trained and saved if it doesn't
+        if self.spending_analyzer.model is None:
+            print("Warning: Could not load or train spending model. Mock responses will be used.")
 
     def process_user_query(self, query: str, user_context: Dict[str, Any] = None) -> Dict[str, Any]:
         """

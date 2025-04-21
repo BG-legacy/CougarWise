@@ -3,6 +3,7 @@ import pandas as pd  # For data manipulation and analysis
 import numpy as np  # For numerical operations
 from sklearn.model_selection import train_test_split  # For splitting data into training and testing sets
 from sklearn.preprocessing import StandardScaler, LabelEncoder  # For data preprocessing
+import pickle  # For saving/loading models
 # Try to import keras, if not available use our mock
 try:
     import keras  # Deep learning library
@@ -76,25 +77,132 @@ class StudentSpendingAnalysis:
         # Set the data path relative to the current directory
         self.data_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'student_spending.csv')
         
+        # Set the model save path - allow override via environment variable
+        self.model_path = os.getenv('MODEL_SAVE_PATH', 
+            os.path.join(os.path.dirname(os.path.abspath(__file__)), 'trained_model.pkl'))
+        
+        # Create directory for model if it doesn't exist
+        model_dir = os.path.dirname(self.model_path)
+        if not os.path.exists(model_dir):
+            try:
+                os.makedirs(model_dir)
+                print(f"Created model directory at {model_dir}")
+            except Exception as e:
+                print(f"Warning: Could not create model directory: {e}")
+                # Fall back to current directory
+                self.model_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'trained_model.pkl')
+        
         # Initialize preprocessing objects
         self.scaler = StandardScaler()
         self.label_encoders = {}
         
-        # Other initialization code remains the same
-        # Load and preprocess the data
-        try:
-            self.data = self.load_and_preprocess_data()
-            print(f"Loaded {len(self.data)} preprocessed records for student spending analysis")
-        except Exception as e:
-            print(f"Warning: Could not load spending data: {e}")
-            self.data = pd.DataFrame()  # Empty dataframe
-
-        # Build the model architecture
-        input_shape = (8,)  # Example shape for student demographic features
-        self.model = self.build_model(input_shape)
+        # Try to load existing model
+        self.model = self.load_model()
         
-        # Trained flag (will be set to True after training)
-        self.trained = False
+        # If no model exists, train a new one
+        if self.model is None:
+            try:
+                self.train_model()
+                self.save_model()
+            except Exception as e:
+                print(f"Error training model: {e}")
+                self.model = None
+
+    def save_model(self):
+        """
+        Save the trained model and preprocessing objects to disk.
+        """
+        try:
+            # Check disk space
+            if not self._check_disk_space():
+                raise Exception("Insufficient disk space to save model")
+            
+            # Create a dictionary with all objects to save
+            model_data = {
+                'model': self.model,
+                'scaler': self.scaler,
+                'label_encoders': self.label_encoders
+            }
+            
+            # Save to file with atomic write
+            temp_path = self.model_path + '.tmp'
+            with open(temp_path, 'wb') as f:
+                pickle.dump(model_data, f)
+            
+            # Atomic rename to ensure file integrity
+            os.replace(temp_path, self.model_path)
+            print(f"Model saved successfully to {self.model_path}")
+        except PermissionError:
+            print(f"Error: Permission denied when saving model to {self.model_path}")
+            raise
+        except Exception as e:
+            print(f"Error saving model: {e}")
+            raise
+
+    def load_model(self):
+        """
+        Load the trained model and preprocessing objects from disk.
+        
+        Returns:
+            Loaded model if successful, None otherwise
+        """
+        try:
+            if os.path.exists(self.model_path):
+                with open(self.model_path, 'rb') as f:
+                    model_data = pickle.load(f)
+                self.model = model_data['model']
+                self.scaler = model_data['scaler']
+                self.label_encoders = model_data['label_encoders']
+                print(f"Model loaded successfully from {self.model_path}")
+                return self.model
+            return None
+        except PermissionError:
+            print(f"Error: Permission denied when loading model from {self.model_path}")
+            return None
+        except Exception as e:
+            print(f"Error loading model: {e}")
+            return None
+
+    def _check_disk_space(self, required_space_mb=100):
+        """
+        Check if there is enough disk space to save the model.
+        
+        Args:
+            required_space_mb: Minimum required space in MB
+            
+        Returns:
+            True if enough space, False otherwise
+        """
+        try:
+            model_dir = os.path.dirname(self.model_path)
+            stat = os.statvfs(model_dir)
+            free_space_mb = (stat.f_bavail * stat.f_frsize) / (1024 * 1024)
+            return free_space_mb >= required_space_mb
+        except Exception as e:
+            print(f"Error checking disk space: {e}")
+            return False
+
+    def retrain_model(self, force=False):
+        """
+        Retrain the model, optionally forcing retraining even if a model exists.
+        
+        Args:
+            force: If True, retrain even if a model exists
+            
+        Returns:
+            Training history if successful, None otherwise
+        """
+        if not force and self.model is not None:
+            print("Model already exists. Use force=True to retrain.")
+            return None
+            
+        try:
+            history = self.train_model()
+            self.save_model()
+            return history
+        except Exception as e:
+            print(f"Error retraining model: {e}")
+            return None
 
     def load_and_preprocess_data(self):
         """
