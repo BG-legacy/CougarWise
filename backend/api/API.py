@@ -2122,3 +2122,26 @@ def get_category_spending(user_id, category='Food'):
             "transaction_count": 0
         }
 
+@app.get("/api/health")
+async def health_check():
+    """
+    Health check endpoint for the API.
+    Returns the status of the API and its dependencies.
+    """
+    try:
+        # Check MongoDB connection
+        db = get_collection(Collections.USERS)
+        db.find_one({})  # Simple query to check connection
+        
+        return {
+            "status": "healthy",
+            "message": "API and database are operational",
+            "timestamp": datetime.now().isoformat()
+        }
+    except Exception as e:
+        return {
+            "status": "unhealthy",
+            "message": f"API check failed: {str(e)}",
+            "timestamp": datetime.now().isoformat()
+        }
+
