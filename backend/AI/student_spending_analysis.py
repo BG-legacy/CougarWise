@@ -78,8 +78,15 @@ class StudentSpendingAnalysis:
         self.data_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'student_spending.csv')
         
         # Set the model save path - allow override via environment variable
-        self.model_path = os.getenv('MODEL_SAVE_PATH', 
-            os.path.join(os.path.dirname(os.path.abspath(__file__)), 'trained_model.pkl'))
+        # On Heroku, we'll use a temporary directory since the filesystem is ephemeral
+        if os.getenv('DYNO'):  # Check if we're running on Heroku
+            import tempfile
+            temp_dir = tempfile.gettempdir()
+            self.model_path = os.path.join(temp_dir, 'trained_model.pkl')
+            print(f"Running on Heroku, using temporary directory: {temp_dir}")
+        else:
+            self.model_path = os.getenv('MODEL_SAVE_PATH', 
+                os.path.join(os.path.dirname(os.path.abspath(__file__)), 'trained_model.pkl'))
         
         # Create directory for model if it doesn't exist
         model_dir = os.path.dirname(self.model_path)

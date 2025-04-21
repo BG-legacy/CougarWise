@@ -30,9 +30,10 @@ from Database.database import get_db, get_collection, Collections
 app = FastAPI()
 
 # Configure CORS
+frontend_url = os.getenv('FRONTEND_URL', 'https://cougar-wise.vercel.app')
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # Allows all origins
+    allow_origins=[frontend_url],  # Allows the frontend URL
     allow_credentials=True,
     allow_methods=["*"],  # Allows all methods
     allow_headers=["*"],  # Allows all headers
